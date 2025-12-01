@@ -5,10 +5,12 @@ services:
     env: node
     region: singapore
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --production=false && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: OPENAI_API_KEY
         sync: false  # Render.comのダッシュボードで手動設定
+      - key: NPM_CONFIG_PRODUCTION
+        value: false
