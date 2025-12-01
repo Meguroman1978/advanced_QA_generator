@@ -3,8 +3,10 @@ services:
   - type: web
     name: advanced-qa-generator
     env: node
+    region: singapore
+    plan: free
     buildCommand: npm install && npm run build
-    startCommand: npm run server
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
