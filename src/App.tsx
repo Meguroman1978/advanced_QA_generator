@@ -14,7 +14,20 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   // API URLを環境に応じて設定
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  // VITE_API_URLが設定されている場合はそれを使用
+  // 設定されていない場合は、hostnameで判定
+  const getApiUrl = () => {
+    if (import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
+    }
+    // runtime判定: localhostの場合のみ別ポートを使用
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      return 'http://localhost:3001';
+    }
+    // 本番環境では空文字（相対パス）
+    return '';
+  };
+  const API_URL = getApiUrl();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +36,7 @@ function App() {
     setResult(null);
 
     try {
+      console.log('Sending request to:', `${API_URL}/api/workflow`);
       const response = await fetch(`${API_URL}/api/workflow`, {
         method: 'POST',
         headers: {
@@ -31,14 +45,24 @@ function App() {
         body: JSON.stringify({ url }),
       });
 
-      const data = await response.json();
+      console.log('Response status:', response.status);
 
-      if (!response.ok || !data.success) {
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Response data:', data);
+
+      if (!data.success) {
         throw new Error(data.error || 'Failed to process workflow');
       }
 
       setResult(data.data);
     } catch (err) {
+      console.error('Request error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setLoading(false);
