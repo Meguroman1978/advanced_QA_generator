@@ -1,0 +1,12 @@
+services:
+  # 統合サーバー（フロントエンド + バックエンド）
+  - type: web
+    name: advanced-qa-generator
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENAI_API_KEY
+        sync: false  # Render.comのダッシュボードで手動設定

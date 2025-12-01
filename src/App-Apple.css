@@ -1,0 +1,686 @@
+/* Apple風モダンデザイン */
+:root {
+  --apple-black: #1d1d1f;
+  --apple-white: #fbfbfd;
+  --apple-gray: #86868b;
+  --apple-blue: #0071e3;
+  --apple-light-blue: #2997ff;
+  --apple-bg: #f5f5f7;
+  --apple-border: #d2d2d7;
+  --shadow-apple: 0 2px 16px rgba(0, 0, 0, 0.08);
+  --shadow-apple-lg: 0 4px 32px rgba(0, 0, 0, 0.12);
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--apple-bg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  color: var(--apple-black);
+}
+
+.container-advanced {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* ヘッダー */
+.header-apple {
+  text-align: center;
+  margin-bottom: 60px;
+  padding: 80px 20px 40px;
+}
+
+.header-apple h1 {
+  font-size: 56px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.07143;
+  color: var(--apple-black);
+  margin: 0;
+}
+
+.header-apple .subtitle-apple {
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.14286;
+  color: var(--apple-gray);
+  margin-top: 16px;
+}
+
+/* コスト表示 */
+.cost-display {
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #ffffff 0%, #f5f5f7 100%);
+  border-radius: 18px;
+  margin-bottom: 30px;
+  border: 1px solid var(--apple-border);
+}
+
+.cost-display p {
+  font-size: 17px;
+  color: var(--apple-gray);
+  margin: 0;
+}
+
+.cost-value {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--apple-blue);
+  margin: 8px 0;
+}
+
+/* プログレスフロー */
+.progress-flow-apple {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: var(--apple-white);
+  border-radius: 18px;
+  margin-bottom: 40px;
+  border: 1px solid var(--apple-border);
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.progress-stage-apple {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  min-width: 140px;
+  border-radius: 12px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
+}
+
+.progress-stage-apple.active {
+  background: var(--apple-blue);
+  transform: scale(1.05);
+}
+
+.progress-stage-apple.completed {
+  background: #34c759;
+}
+
+.stage-icon-apple {
+  font-size: 32px;
+  margin-bottom: 12px;
+  transition: transform 0.3s;
+}
+
+.progress-stage-apple.active .stage-icon-apple,
+.progress-stage-apple.completed .stage-icon-apple {
+  transform: scale(1.1);
+}
+
+.stage-label-apple {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--apple-black);
+  text-align: center;
+}
+
+.progress-stage-apple.active .stage-label-apple,
+.progress-stage-apple.completed .stage-label-apple {
+  color: white;
+  font-weight: 600;
+}
+
+.progress-arrow-apple {
+  font-size: 24px;
+  color: var(--apple-gray);
+  opacity: 0.5;
+}
+
+.progress-arrow-apple.active {
+  opacity: 1;
+  color: var(--apple-blue);
+}
+
+/* フォーム */
+.form-apple {
+  background: var(--apple-white);
+  padding: 48px;
+  border-radius: 18px;
+  margin-bottom: 40px;
+  border: 1px solid var(--apple-border);
+}
+
+.form-section-apple {
+  margin-bottom: 48px;
+}
+
+.form-section-apple:last-of-type {
+  margin-bottom: 0;
+}
+
+.form-section-apple h3 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--apple-black);
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+
+.input-group-apple {
+  margin-bottom: 24px;
+}
+
+.input-group-apple label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--apple-black);
+}
+
+.input-group-apple input[type="url"],
+.input-group-apple select,
+.input-group-apple textarea {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 17px;
+  border: 1px solid var(--apple-border);
+  border-radius: 12px;
+  transition: all 0.2s;
+  background: var(--apple-white);
+  font-family: inherit;
+}
+
+.input-group-apple input:focus,
+.input-group-apple select:focus,
+.input-group-apple textarea:focus {
+  outline: none;
+  border-color: var(--apple-blue);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+}
+
+.checkbox-group-apple {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(0, 113, 227, 0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 113, 227, 0.1);
+}
+
+.checkbox-label-apple {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 14px 16px;
+  background: var(--apple-white);
+  border-radius: 10px;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.checkbox-label-apple:hover {
+  border-color: var(--apple-blue);
+  background: rgba(0, 113, 227, 0.05);
+  transform: translateX(4px);
+}
+
+.checkbox-label-apple input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  accent-color: var(--apple-blue);
+  flex-shrink: 0;
+}
+
+.checkbox-label-apple span {
+  font-size: 17px;
+  color: var(--apple-black);
+  font-weight: 500;
+  flex: 1;
+}
+
+/* ボタン */
+.button-apple {
+  width: 100%;
+  padding: 17px 24px;
+  font-size: 17px;
+  font-weight: 500;
+  color: white;
+  background: var(--apple-blue);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  letter-spacing: -0.01em;
+}
+
+.button-apple:hover:not(:disabled) {
+  background: var(--apple-light-blue);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-apple);
+}
+
+.button-apple:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 統計カード */
+.stats-apple {
+  background: var(--apple-white);
+  padding: 48px;
+  border-radius: 18px;
+  margin-bottom: 40px;
+  border: 1px solid var(--apple-border);
+}
+
+.stats-apple h3 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--apple-black);
+  margin-bottom: 32px;
+}
+
+.stats-grid-apple {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 24px;
+}
+
+.stat-item-apple {
+  text-align: center;
+  padding: 32px 24px;
+  background: var(--apple-bg);
+  border-radius: 16px;
+  transition: all 0.3s;
+  border: 1px solid transparent;
+}
+
+.stat-item-apple:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-apple);
+  border-color: var(--apple-border);
+}
+
+.stat-icon-apple {
+  font-size: 40px;
+  margin-bottom: 16px;
+}
+
+.stat-value-apple {
+  font-size: 48px;
+  font-weight: 600;
+  color: var(--apple-blue);
+  line-height: 1;
+  margin-bottom: 12px;
+}
+
+.stat-label-apple {
+  font-size: 15px;
+  color: var(--apple-gray);
+  font-weight: 500;
+}
+
+/* Q&Aリスト */
+.qa-list-apple {
+  background: var(--apple-white);
+  padding: 48px;
+  border-radius: 18px;
+  border: 1px solid var(--apple-border);
+}
+
+.qa-list-header-apple {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.qa-list-header-apple h3 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--apple-black);
+}
+
+.export-controls-apple {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.export-select-apple {
+  padding: 12px 16px;
+  font-size: 15px;
+  border: 1px solid var(--apple-border);
+  border-radius: 12px;
+  background: var(--apple-white);
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.export-select-apple:focus {
+  outline: none;
+  border-color: var(--apple-blue);
+}
+
+.export-button-apple {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 500;
+  color: white;
+  background: var(--apple-blue);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.export-button-apple:hover {
+  background: var(--apple-light-blue);
+}
+
+/* Q&Aアイテム */
+.qa-item-apple {
+  padding: 32px;
+  margin-bottom: 20px;
+  background: var(--apple-bg);
+  border-radius: 16px;
+  transition: all 0.3s;
+  border: 1px solid transparent;
+}
+
+.qa-item-apple:hover {
+  border-color: var(--apple-border);
+  box-shadow: var(--shadow-apple);
+}
+
+.qa-header-apple {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.qa-number-apple {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--apple-blue);
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 17px;
+}
+
+.qa-question-apple {
+  flex: 1;
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--apple-black);
+  line-height: 1.4;
+}
+
+.qa-answer-apple {
+  margin-bottom: 20px;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--apple-gray);
+  padding-left: 68px;
+}
+
+.qa-meta-apple {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-left: 68px;
+  flex-wrap: wrap;
+}
+
+.badge-apple {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.badge-collected-apple {
+  background: #e3f2fd;
+  color: #0071e3;
+}
+
+.badge-suggested-apple {
+  background: #fff8e1;
+  color: #ff9500;
+}
+
+.badge-type-apple {
+  background: #f3e5f5;
+  color: #9c27b0;
+}
+
+.badge-video-apple {
+  background: linear-gradient(135deg, #ff6b35 0%, #ff9500 100%);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+  animation: pulse-video 2s infinite;
+}
+
+@keyframes pulse-video {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+.qa-actions-apple {
+  display: flex;
+  gap: 12px;
+  padding-left: 68px;
+}
+
+.btn-apple {
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 500;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-edit-apple {
+  background: var(--apple-blue);
+  color: white;
+}
+
+.btn-delete-apple {
+  background: #ff3b30;
+  color: white;
+}
+
+.btn-save-apple {
+  background: #34c759;
+  color: white;
+}
+
+.btn-cancel-apple {
+  background: var(--apple-gray);
+  color: white;
+}
+
+.btn-apple:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+/* Q&A編集フォーム */
+.qa-edit-form-apple {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  background: var(--apple-white);
+  border-radius: 12px;
+  border: 2px solid var(--apple-blue);
+}
+
+.edit-input-apple {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 17px;
+  font-weight: 600;
+  border: 1px solid var(--apple-border);
+  border-radius: 12px;
+  background: var(--apple-white);
+  font-family: inherit;
+  color: var(--apple-black);
+  transition: all 0.2s;
+  min-height: 56px;
+  box-sizing: border-box;
+}
+
+.edit-input-apple:focus {
+  outline: none;
+  border-color: var(--apple-blue);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+}
+
+.edit-textarea-apple {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 17px;
+  line-height: 1.6;
+  border: 1px solid var(--apple-border);
+  border-radius: 12px;
+  background: var(--apple-white);
+  font-family: inherit;
+  color: var(--apple-black);
+  transition: all 0.2s;
+  resize: vertical;
+  min-height: 200px;
+  box-sizing: border-box;
+}
+
+.edit-textarea-apple:focus {
+  outline: none;
+  border-color: var(--apple-blue);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+}
+
+.edit-actions-apple {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* API Key入力エリア */
+.api-key-input-apple {
+  padding: 32px;
+  background: linear-gradient(135deg, #fff9e6 0%, #fff5cc 100%);
+  border: 2px solid #ff9500;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.api-key-input-apple h3 {
+  color: #1d1d1f;
+  font-size: 21px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+.api-key-input-apple .api-key-input {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 15px;
+  border: 2px solid var(--apple-border);
+  border-radius: 10px;
+  background: var(--apple-white);
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.api-key-input-apple .api-key-input:focus {
+  outline: none;
+  border-color: #ff9500;
+  box-shadow: 0 0 0 4px rgba(255, 149, 0, 0.1);
+}
+
+/* 成功メッセージ */
+.success-message-apple {
+  padding: 20px 32px;
+  background: #d1f4e0;
+  border: 1px solid #34c759;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  text-align: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.success-message-apple p {
+  margin: 0;
+  color: #1d7a3f;
+  font-weight: 500;
+  font-size: 17px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* レスポンシブ */
+@media (max-width: 768px) {
+  .header-apple h1 {
+    font-size: 36px;
+  }
+
+  .header-apple .subtitle-apple {
+    font-size: 21px;
+  }
+
+  .form-apple {
+    padding: 32px 24px;
+  }
+
+  .stats-grid-apple {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .qa-answer-apple,
+  .qa-meta-apple,
+  .qa-actions-apple {
+    padding-left: 0;
+  }
+
+  .qa-header-apple {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
