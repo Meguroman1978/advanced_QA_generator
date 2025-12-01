@@ -96,75 +96,101 @@ async function generateQA(content: string, maxQA: number = 5, language: string =
   });
 
   const languagePrompts: Record<string, string> = {
-    ja: `以下のWebサイトのテキストから、異なる重要なポイントについて高品質なQ&A（質問と回答）を作成してください。
+    ja: `あなたは日本語のQ&A作成専門家です。以下のテキストから、日本語で正確に${maxQA}個のQ&Aを作成してください。
 
-重要な注意事項：
-- 各Q&Aは完全にユニークで、異なるトピックを扱うこと
-- 同じ質問や類似した質問を繰り返さないこと
-- 同じ回答や類似した回答を繰り返さないこと
-- 質の高いQ&Aのみを作成し、無理に数を増やさないこと
-- コンテンツから得られる情報が少ない場合は、少ない数でも構いません
-- 目標: 最大${maxQA}個（質が高ければそれ以下でも可）
+【絶対守るべきルール】
+1. ✅ 言語: 質問と回答は100%日本語で書くこと（英語禁止）
+2. ✅ 数量: 必ず${maxQA}個の異なるQ&Aを生成すること
+3. ✅ 品質: 各Q&Aは完全にユニークで、異なる角度からの質問であること
+4. ❌ 重複禁止: 同じまたは類似した質問を繰り返さないこと
 
-形式：
-Q1: [ユニークな質問]
-A1: [具体的な回答]
+【出力フォーマット - 必ず守る】
+Q1: [日本語の質問]
+A1: [日本語の詳細な回答]
 
-Q2: [Q1とは異なる質問]
-A2: [具体的な回答]
+Q2: [日本語の質問]
+A2: [日本語の詳細な回答]
 
-テキスト:
-${content}`,
-    en: `Create high-quality, unique Q&A pairs about different important points from the following website text.
+...Q${maxQA}まで続ける
 
-CRITICAL REQUIREMENTS:
-- Each Q&A must be completely unique and cover different topics
-- Do NOT repeat the same or similar questions
-- Do NOT repeat the same or similar answers
-- Focus on quality over quantity - don't force creation of low-quality Q&As
-- If the content has limited information, fewer Q&As are acceptable
-- Target: Up to ${maxQA} pairs (fewer is fine if quality is maintained)
+【ソーステキスト】
+${content}
 
-Format:
-Q1: [unique question]
-A1: [specific answer]
+【最重要】必ず${maxQA}個の異なるQ&Aを日本語で生成してください。英語や他の言語を使わないでください。`,
+    en: `You are an expert Q&A creator. Generate EXACTLY ${maxQA} Q&A pairs in ENGLISH from the text below.
 
-Q2: [different question from Q1]
-A2: [specific answer]
+【ABSOLUTE RULES】
+1. ✅ LANGUAGE: Write 100% in ENGLISH (NO other languages)
+2. ✅ QUANTITY: Generate EXACTLY ${maxQA} distinct Q&A pairs
+3. ✅ QUALITY: Each Q&A must be completely unique with different angles
+4. ❌ NO DUPLICATES: Do NOT repeat similar questions
 
-Text:
-${content}`,
-    zh: `从以下网站文本中创建关于不同重要要点的高质量问答对。
+【OUTPUT FORMAT - MUST FOLLOW】
+Q1: [English question]
+A1: [Detailed English answer]
 
-关键要求：
-- 每个问答必须完全独特，涵盖不同主题
-- 不要重复相同或相似的问题
-- 不要重复相同或相似的答案
-- 注重质量而非数量 - 不要强制创建低质量问答
-- 如果内容信息有限，较少的问答是可以接受的
-- 目标：最多${maxQA}对（如果保持质量，较少也可以）
+Q2: [English question]
+A2: [Detailed English answer]
 
-格式：
-Q1: [独特问题]
-A1: [具体答案]
+...continue to Q${maxQA}
 
-Q2: [与Q1不同的问题]
-A2: [具体答案]
+【SOURCE TEXT】
+${content}
 
-文本：
-${content}`
+【CRITICAL】Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH. Do NOT use Japanese or any other language.`,
+    zh: `你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
+
+【绝对规则】
+1. ✅ 语言: 100%用中文编写（禁止英文）
+2. ✅ 数量: 必须生成正好${maxQA}个不同的问答对
+3. ✅ 质量: 每个问答对必须完全独特，从不同角度提问
+4. ❌ 禁止重复: 不要重复相似的问题
+
+【输出格式 - 必须遵守】
+Q1: [中文问题]
+A1: [详细的中文答案]
+
+Q2: [中文问题]
+A2: [详细的中文答案]
+
+...继续到Q${maxQA}
+
+【源文本】
+${content}
+
+【最重要】必须用中文生成正好${maxQA}个不同的问答对。不要使用英文或其他语言。`
   };
 
   try {
     const prompt = languagePrompts[language] || languagePrompts['ja'];
     
-    // maxQAに応じてmax_tokensを調整（1つのQ&Aにつき約60トークン+バッファ）
-    // gpt-3.5-turboの最大出力トークンは4096、gpt-4は8192
-    const estimatedTokens = Math.min(maxQA * 80 + 1000, 4096);
+    // 言語名をマッピング
+    const languageNames: Record<string, string> = {
+      ja: '日本語 (Japanese)',
+      en: 'English',
+      zh: '中文 (Chinese)'
+    };
+    const targetLanguage = languageNames[language] || languageNames['ja'];
+    
+    // maxQAに応じてmax_tokensを調整
+    // gpt-3.5-turbo: 最大4096トークン
+    // gpt-4o-mini: 最大16384トークン
+    
+    // 80問の場合は約6400トークン必要なので、gpt-4o-miniを使用
+    const useGPT4 = maxQA > 50;
+    const model = useGPT4 ? 'gpt-4o-mini' : 'gpt-3.5-turbo';
+    const maxTokensLimit = useGPT4 ? 16384 : 4096;
+    const estimatedTokens = Math.min(maxQA * 120 + 1500, maxTokensLimit);
+    
+    console.log(`[OpenAI] Model: ${model}, max_tokens: ${estimatedTokens}, target: ${maxQA} Q&As in ${targetLanguage}`);
     
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: model,
       messages: [
+        {
+          role: 'system',
+          content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct.`
+        },
         {
           role: 'user',
           content: prompt
@@ -175,7 +201,11 @@ ${content}`
     });
 
     const generatedText = response.choices[0]?.message?.content || '';
-    console.log(`OpenAI response length: ${generatedText.length} characters`);
+    const tokensUsed = response.usage?.total_tokens || 0;
+    console.log(`[OpenAI] Response: ${generatedText.length} chars, ${tokensUsed} tokens used`);
+    
+    // 生成されたテキストの最初の200文字をログ出力（デバッグ用）
+    console.log(`[OpenAI] First 200 chars: ${generatedText.substring(0, 200)}...`);
     
     // Q&Aをパース（改善版）
     const qaItems: Array<{question: string, answer: string}> = [];
@@ -268,12 +298,24 @@ ${content}`
 // メインワークフローエンドポイント
 app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Response<WorkflowResponse>) => {
   console.log('=== Workflow Request Started ===');
-  console.error('RECEIVED REQUEST:', req.body);
-  console.log('Request body:', req.body);
-  console.log('Request headers:', req.headers);
+  console.log('Raw request body:', JSON.stringify(req.body, null, 2));
+  console.log('Content-Type:', req.headers['content-type']);
   
   try {
-    const { url, maxQA = 5, language = 'ja' } = req.body;
+    // デフォルト値を明示的に設定
+    const requestMaxQA = req.body.maxQA;
+    const requestLanguage = req.body.language;
+    
+    const url = req.body.url;
+    const maxQA = requestMaxQA !== undefined && requestMaxQA !== null ? Number(requestMaxQA) : 5;
+    const language = requestLanguage && requestLanguage.trim() !== '' ? requestLanguage : 'ja';
+
+    console.log('Parsed parameters:');
+    console.log('  - url:', url);
+    console.log('  - maxQA (raw):', requestMaxQA, 'type:', typeof requestMaxQA);
+    console.log('  - maxQA (parsed):', maxQA, 'type:', typeof maxQA);
+    console.log('  - language (raw):', requestLanguage, 'type:', typeof requestLanguage);
+    console.log('  - language (parsed):', language, 'type:', typeof language);
 
     if (!url) {
       console.log('Error: URL is missing');
@@ -282,8 +324,6 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
         error: 'URL is required'
       });
     }
-
-    console.log('Request params:', { url, maxQA, language });
 
     // ステップ1: HTTPリクエストでWebページを取得
     console.log('Fetching website:', url);
@@ -294,8 +334,9 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
     const extractedContent = extractContent(html);
 
     // ステップ3: OpenAI APIで複数のQ&Aを生成
-    console.log(`Generating ${maxQA} Q&A items...`);
+    console.log(`[GENERATION] Starting Q&A generation with maxQA=${maxQA}, language=${language}`);
     const qaList = await generateQA(extractedContent, maxQA, language);
+    console.log(`[GENERATION] Generated ${qaList.length} Q&A items`);
 
     // 動画推奨が必要かどうかを判定する関数
     const needsVideoExplanation = (question: string, answer: string): boolean => {
