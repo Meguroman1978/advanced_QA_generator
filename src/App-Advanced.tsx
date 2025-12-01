@@ -268,6 +268,13 @@ function AppAdvanced() {
       setProcessStage('generating');
       await new Promise(resolve => setTimeout(resolve, 500));
 
+      console.log('[RESPONSE] Full data:', data);
+      console.log('[RESPONSE] data.data:', data.data);
+      console.log('[RESPONSE] qaItems count:', data.data?.qaItems?.length || 0);
+      console.log('[RESPONSE] First 3 questions:', 
+        data.data?.qaItems?.slice(0, 3).map((q: any) => q.question) || []
+      );
+
       setResult(data.data);
       setSessionId(Date.now().toString());
       setOriginalLanguage(language); // Q&A生成時の言語を記録

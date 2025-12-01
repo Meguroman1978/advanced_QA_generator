@@ -514,6 +514,12 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
     // 全Q&Aを結合した文字列も生成（後方互換性のため）
     const qaResult = qaList.map((qa, i) => `Q${i+1}: ${qa.question}\nA${i+1}: ${qa.answer}`).join('\n\n');
 
+    console.log(`🔍 DEBUG - Before response:`);
+    console.log(`  - qaList.length: ${qaList.length}`);
+    console.log(`  - qaItems.length: ${qaItems.length}`);
+    console.log(`  - First Q&A: ${qaItems[0]?.question?.substring(0, 50) || 'N/A'}`);
+    console.log(`  - Last Q&A: ${qaItems[qaItems.length - 1]?.question?.substring(0, 50) || 'N/A'}`);
+
     // シンプルサーバー用のレスポンスフォーマット
     // robotsAllowedをdataの中に含める（フロントエンドがdata.dataを使用するため）
     const responseData = {
@@ -535,7 +541,8 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
       }
     };
     
-    console.log(`Response: Generated ${qaItems.length} Q&A items`);
+    console.log(`✅ Response: Generated ${qaItems.length} Q&A items`);
+    console.log(`📤 Sending response with ${JSON.stringify(responseData).length} bytes`);
     res.json(responseData);
   } catch (error) {
     console.error('Workflow error:', error);
@@ -605,9 +612,10 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
       
       try {
         // フォント登録
+        console.log(`📝 Attempting to register font: ${fontPath}`);
         doc.registerFont('NotoSans', fontPath);
         doc.font('NotoSans');
-        console.log('Font registered successfully');
+        console.log('✅ Font registered successfully');
         
         // タイトル
         doc.fontSize(20).text('Q&A Collection', { align: 'center' });
@@ -636,10 +644,15 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
         // PDF終了
         doc.end();
       } catch (error) {
-        console.error('PDF content generation error:', error);
+        console.error('❌ PDF content generation error:', error);
+        console.error('Error details:', error instanceof Error ? error.message : String(error));
+        console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
         doc.end();
         if (!res.headersSent) {
-          res.status(500).json({ error: 'PDF content generation failed' });
+          res.status(500).json({ 
+            error: 'PDF content generation failed',
+            details: error instanceof Error ? error.message : String(error)
+          });
         }
       }
     } else if (format === 'text') {

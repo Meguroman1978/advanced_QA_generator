@@ -1,0 +1,523 @@
+import express from 'express';
+import cors from 'cors';
+import axios from 'axios';
+import * as cheerio from 'cheerio';
+import OpenAI from 'openai';
+import dotenv from 'dotenv';
+import path from 'path';
+import PDFDocument from 'pdfkit';
+import fs from 'fs';
+dotenv.config();
+const app = express();
+const port = process.env.PORT || 3001;
+app.use(cors());
+app.use(express.json());
+// 静的ファイルのパスを定義（後で使用）
+const distPath = path.join(process.cwd(), 'dist');
+// HTTPリクエストを実行してHTMLを取得（通常のブラウザとして振る舞う）
+async function fetchWebsite(url) {
+    try {
+        const response = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Cache-Control': 'max-age=0'
+            },
+            timeout: 15000,
+            maxRedirects: 5,
+            validateStatus: (status) => status < 500 // 500未満のステータスコードを受け入れる
+        });
+        return response.data;
+    }
+    catch (error) {
+        throw new Error(`Failed to fetch website: ${error}`);
+    }
+}
+// HTMLからテキストコンテンツを抽出
+function extractContent(html) {
+    const $ = cheerio.load(html);
+    // スクリプト、スタイル、ナビゲーションなどを削除
+    $('script, style, nav, header, footer').remove();
+    // bodyタグのテキストを取得
+    const content = $('body').text();
+    // 余分な空白を削除して整形
+    return content
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 4000); // OpenAI APIの制限を考慮して4000文字に制限
+}
+// OpenAI APIを使用して複数のQ&Aを生成
+async function generateQA(content, maxQA = 5, language = 'ja') {
+    const apiKey = process.env.OPENAI_API_KEY;
+    console.log('API Key check:', apiKey ? `Found (length: ${apiKey.length})` : 'NOT FOUND');
+    console.log('Generating Q&A:', { maxQA, language, contentLength: content.length });
+    if (!apiKey) {
+        throw new Error('OpenAI API key is not configured');
+    }
+    const openai = new OpenAI({
+        apiKey: apiKey
+    });
+    const languagePrompts = {
+        ja: `あなたは日本語のQ&A作成専門家です。以下のテキストから、日本語で正確に${maxQA}個のQ&Aを作成してください。
+
+【絶対守るべきルール】
+1. ✅ 言語: 質問と回答は100%日本語で書くこと（英語禁止）
+2. ✅ 数量: 必ず${maxQA}個の異なるQ&Aを生成すること
+3. ✅ 品質: 各Q&Aは完全にユニークで、異なる角度からの質問であること
+4. ❌ 重複禁止: 同じまたは類似した質問を繰り返さないこと
+
+【出力フォーマット - 必ず守る】
+Q1: [日本語の質問]
+A1: [日本語の詳細な回答]
+
+Q2: [日本語の質問]
+A2: [日本語の詳細な回答]
+
+...Q${maxQA}まで続ける
+
+【ソーステキスト】
+${content}
+
+【最重要】必ず${maxQA}個の異なるQ&Aを日本語で生成してください。英語や他の言語を使わないでください。`,
+        en: `You are an expert Q&A creator. Generate EXACTLY ${maxQA} Q&A pairs in ENGLISH from the text below.
+
+【ABSOLUTE RULES】
+1. ✅ LANGUAGE: Write 100% in ENGLISH (NO other languages)
+2. ✅ QUANTITY: Generate EXACTLY ${maxQA} distinct Q&A pairs
+3. ✅ QUALITY: Each Q&A must be completely unique with different angles
+4. ❌ NO DUPLICATES: Do NOT repeat similar questions
+
+【OUTPUT FORMAT - MUST FOLLOW】
+Q1: [English question]
+A1: [Detailed English answer]
+
+Q2: [English question]
+A2: [Detailed English answer]
+
+...continue to Q${maxQA}
+
+【SOURCE TEXT】
+${content}
+
+【CRITICAL】Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH. Do NOT use Japanese or any other language.`,
+        zh: `你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
+
+【绝对规则】
+1. ✅ 语言: 100%用中文编写（禁止英文）
+2. ✅ 数量: 必须生成正好${maxQA}个不同的问答对
+3. ✅ 质量: 每个问答对必须完全独特，从不同角度提问
+4. ❌ 禁止重复: 不要重复相似的问题
+
+【输出格式 - 必须遵守】
+Q1: [中文问题]
+A1: [详细的中文答案]
+
+Q2: [中文问题]
+A2: [详细的中文答案]
+
+...继续到Q${maxQA}
+
+【源文本】
+${content}
+
+【最重要】必须用中文生成正好${maxQA}个不同的问答对。不要使用英文或其他语言。`
+    };
+    try {
+        const prompt = languagePrompts[language] || languagePrompts['ja'];
+        // 言語名をマッピング
+        const languageNames = {
+            ja: '日本語 (Japanese)',
+            en: 'English',
+            zh: '中文 (Chinese)'
+        };
+        const targetLanguage = languageNames[language] || languageNames['ja'];
+        // maxQAに応じてmax_tokensを調整
+        // gpt-3.5-turbo: 最大4096トークン
+        // gpt-4o-mini: 最大16384トークン
+        // 80問の場合は約6400トークン必要なので、gpt-4o-miniを使用
+        const useGPT4 = maxQA > 50;
+        const model = useGPT4 ? 'gpt-4o-mini' : 'gpt-3.5-turbo';
+        const maxTokensLimit = useGPT4 ? 16384 : 4096;
+        const estimatedTokens = Math.min(maxQA * 120 + 1500, maxTokensLimit);
+        console.log(`[OpenAI] Model: ${model}, max_tokens: ${estimatedTokens}, target: ${maxQA} Q&As in ${targetLanguage}`);
+        const response = await openai.chat.completions.create({
+            model: model,
+            messages: [
+                {
+                    role: 'system',
+                    content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct.`
+                },
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            temperature: 0.7,
+            max_tokens: estimatedTokens
+        });
+        const generatedText = response.choices[0]?.message?.content || '';
+        const tokensUsed = response.usage?.total_tokens || 0;
+        console.log(`[OpenAI] Response: ${generatedText.length} chars, ${tokensUsed} tokens used`);
+        // 生成されたテキストの最初の200文字をログ出力（デバッグ用）
+        console.log(`[OpenAI] First 200 chars: ${generatedText.substring(0, 200)}...`);
+        // Q&Aをパース（改善版）
+        const qaItems = [];
+        const lines = generatedText.split('\n');
+        let currentQ = '';
+        let currentA = '';
+        let inAnswer = false;
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed)
+                continue;
+            // Q1:, Q2: などの形式を検出（柔軟なマッチング）
+            const qMatch = trimmed.match(/^Q\d+[:：]?\s*(.+)$/i);
+            const aMatch = trimmed.match(/^A\d+[:：]?\s*(.+)$/i);
+            if (qMatch) {
+                // 前のQ&Aがあれば保存
+                if (currentQ && currentA) {
+                    qaItems.push({ question: currentQ.trim(), answer: currentA.trim() });
+                }
+                currentQ = qMatch[1].trim();
+                currentA = '';
+                inAnswer = false;
+            }
+            else if (aMatch) {
+                currentA = aMatch[1].trim();
+                inAnswer = true;
+            }
+            else if (inAnswer && currentA) {
+                // 回答の続き
+                currentA += ' ' + trimmed;
+            }
+            else if (!inAnswer && currentQ) {
+                // 質問の続き
+                currentQ += ' ' + trimmed;
+            }
+        }
+        // 最後のQ&Aを追加
+        if (currentQ && currentA) {
+            qaItems.push({ question: currentQ.trim(), answer: currentA.trim() });
+        }
+        console.log(`Parsed ${qaItems.length} Q&A items from response`);
+        // 重複を除去（質問と回答の両方をチェック）
+        const uniqueQA = [];
+        const seenQuestions = new Set();
+        const seenAnswers = new Set();
+        for (const item of qaItems) {
+            const qLower = item.question.toLowerCase().trim();
+            const aLower = item.answer.toLowerCase().trim();
+            // 完全一致の重複をチェック
+            if (seenQuestions.has(qLower) || seenAnswers.has(aLower)) {
+                console.warn(`Duplicate detected: "${item.question.substring(0, 50)}..."`);
+                continue;
+            }
+            // 類似度チェック（簡易版：最初の50文字が似ている場合）
+            let isDuplicate = false;
+            for (const seenQ of seenQuestions) {
+                if (qLower.substring(0, 50) === seenQ.substring(0, 50)) {
+                    console.warn(`Similar question detected: "${item.question.substring(0, 50)}..."`);
+                    isDuplicate = true;
+                    break;
+                }
+            }
+            if (!isDuplicate) {
+                seenQuestions.add(qLower);
+                seenAnswers.add(aLower);
+                uniqueQA.push(item);
+            }
+        }
+        console.log(`After deduplication: ${uniqueQA.length} unique Q&A items (removed ${qaItems.length - uniqueQA.length} duplicates)`);
+        // 不足している場合は警告
+        if (uniqueQA.length < maxQA * 0.7) {
+            console.warn(`Warning: Requested ${maxQA} Q&As but only generated ${uniqueQA.length} unique items`);
+        }
+        // maxQAの数に制限（超過分はカット）
+        return uniqueQA.slice(0, maxQA);
+    }
+    catch (error) {
+        throw new Error(`Failed to generate Q&A: ${error}`);
+    }
+}
+// メインワークフローエンドポイント
+app.post('/api/workflow', async (req, res) => {
+    console.log('=== Workflow Request Started ===');
+    console.log('Raw request body:', JSON.stringify(req.body, null, 2));
+    console.log('Content-Type:', req.headers['content-type']);
+    try {
+        // デフォルト値を明示的に設定
+        const requestMaxQA = req.body.maxQA;
+        const requestLanguage = req.body.language;
+        const url = req.body.url;
+        const maxQA = requestMaxQA !== undefined && requestMaxQA !== null ? Number(requestMaxQA) : 5;
+        const language = requestLanguage && requestLanguage.trim() !== '' ? requestLanguage : 'ja';
+        console.log('Parsed parameters:');
+        console.log('  - url:', url);
+        console.log('  - maxQA (raw):', requestMaxQA, 'type:', typeof requestMaxQA);
+        console.log('  - maxQA (parsed):', maxQA, 'type:', typeof maxQA);
+        console.log('  - language (raw):', requestLanguage, 'type:', typeof requestLanguage);
+        console.log('  - language (parsed):', language, 'type:', typeof language);
+        if (!url) {
+            console.log('Error: URL is missing');
+            return res.status(400).json({
+                success: false,
+                error: 'URL is required'
+            });
+        }
+        // ステップ1: HTTPリクエストでWebページを取得
+        console.log('Fetching website:', url);
+        const html = await fetchWebsite(url);
+        // ステップ2: HTMLからコンテンツを抽出
+        console.log('Extracting content...');
+        const extractedContent = extractContent(html);
+        // ステップ3: OpenAI APIで複数のQ&Aを生成
+        console.log(`[GENERATION] Starting Q&A generation with maxQA=${maxQA}, language=${language}`);
+        const qaList = await generateQA(extractedContent, maxQA, language);
+        console.log(`[GENERATION] Generated ${qaList.length} Q&A items`);
+        // 動画推奨が必要かどうかを判定する関数
+        const needsVideoExplanation = (question, answer) => {
+            const videoKeywords = [
+                // 日本語
+                '方法', '手順', '使い方', '操作', '設定', '取り付け', '組み立て', 'やり方',
+                '仕組み', '構造', '動作', '機能', 'デザイン', '外観', '見た目',
+                // 英語（より広範なマッチング）
+                'how', 'step', 'method', 'procedure', 'setup', 'install', 'assemble',
+                'build', 'create', 'make', 'configure', 'adjust', 'change', 'replace',
+                'remove', 'attach', 'connect', 'mechanism', 'structure', 'works',
+                'feature', 'design', 'appearance', 'look', 'demonstration', 'visual',
+                // 中国語
+                '方法', '步骤', '使用', '操作', '设置', '安装', '组装',
+                '机制', '结构', '功能', '设计', '外观'
+            ];
+            const combined = (question + ' ' + answer).toLowerCase();
+            return videoKeywords.some(keyword => combined.includes(keyword.toLowerCase()));
+        };
+        // qaItemsを生成（動画推奨情報を含む）
+        const qaItems = qaList.map((qa, index) => {
+            const needsVideo = needsVideoExplanation(qa.question, qa.answer);
+            console.error(`DEBUG Q${index + 1} needsVideo: ${needsVideo} - Q: ${qa.question.substring(0, 50)}`);
+            const item = {
+                id: `${Date.now()}-${index}`,
+                question: qa.question,
+                answer: qa.answer,
+                source: 'collected',
+                sourceType: 'text',
+                timestamp: Date.now(),
+                needsVideo: needsVideo
+            };
+            if (needsVideo) {
+                item.videoReason = language === 'ja'
+                    ? 'この内容は視覚的な説明があるとより理解しやすくなります。'
+                    : language === 'zh'
+                        ? '此内容通过视觉说明会更容易理解。'
+                        : 'This content would be easier to understand with visual explanation.';
+                item.videoExamples = [
+                    language === 'ja'
+                        ? '操作方法のデモンストレーション動画'
+                        : language === 'zh'
+                            ? '操作方法演示视频'
+                            : 'Demonstration video of the operation',
+                    language === 'ja'
+                        ? '実際の使用例を示す動画'
+                        : language === 'zh'
+                            ? '实际使用示例视频'
+                            : 'Video showing actual usage examples'
+                ];
+            }
+            return item;
+        });
+        // 全Q&Aを結合した文字列も生成（後方互換性のため）
+        const qaResult = qaList.map((qa, i) => `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`).join('\n\n');
+        // シンプルサーバー用のレスポンスフォーマット
+        // robotsAllowedをdataの中に含める（フロントエンドがdata.dataを使用するため）
+        const responseData = {
+            success: true,
+            data: {
+                url,
+                urls: [url], // 配列形式も追加
+                extractedContent: extractedContent.substring(0, 500) + '...', // 最初の500文字のみ返す
+                qaResult,
+                qaItems,
+                robotsAllowed: true, // robots.txtチェックを無効化
+                stats: {
+                    totalPages: 1,
+                    imagesAnalyzed: 0,
+                    videosAnalyzed: 0,
+                    pdfsAnalyzed: 0,
+                    reviewsAnalyzed: 0
+                }
+            }
+        };
+        console.log(`Response: Generated ${qaItems.length} Q&A items`);
+        res.json(responseData);
+    }
+    catch (error) {
+        console.error('Workflow error:', error);
+        res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error occurred'
+        });
+    }
+});
+// PDFエクスポートエンドポイント（シンプル版）
+app.post('/api/export/single', async (req, res) => {
+    try {
+        const { qaItems, format } = req.body;
+        console.log(`Export request: format=${format}, items=${qaItems?.length}`);
+        if (!qaItems || !Array.isArray(qaItems) || qaItems.length === 0) {
+            return res.status(400).json({ error: 'Q&A items are required' });
+        }
+        if (format === 'pdf') {
+            console.log('Starting PDF generation...');
+            // PDFKitを使用してPDFを生成（同期的に）
+            // 複数のパスを試行
+            const fontPaths = [
+                '/home/user/webapp/fonts/NotoSansJP-Regular.ttf',
+                path.join(process.cwd(), 'fonts', 'NotoSansJP-Regular.ttf'),
+                path.join(__dirname, 'fonts', 'NotoSansJP-Regular.ttf')
+            ];
+            console.log('Trying font paths:', fontPaths);
+            let fontPath = '';
+            for (const p of fontPaths) {
+                if (fs.existsSync(p)) {
+                    fontPath = p;
+                    console.log(`Font found at: ${fontPath}`);
+                    break;
+                }
+            }
+            if (!fontPath) {
+                console.error('Font not found in any of these paths:', fontPaths);
+                return res.status(500).json({ error: 'Font file not found' });
+            }
+            const doc = new PDFDocument({ margin: 50 });
+            const chunks = [];
+            // イベントハンドラを先に設定
+            doc.on('data', (chunk) => chunks.push(chunk));
+            doc.on('end', () => {
+                const pdfBuffer = Buffer.concat(chunks);
+                console.log(`PDF generated: ${pdfBuffer.length} bytes`);
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader('Content-Disposition', 'attachment; filename="qa-collection.pdf"');
+                res.send(pdfBuffer);
+            });
+            // エラーハンドラ
+            doc.on('error', (err) => {
+                console.error('PDF generation error:', err);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'PDF generation failed' });
+                }
+            });
+            try {
+                // フォント登録
+                doc.registerFont('NotoSans', fontPath);
+                doc.font('NotoSans');
+                console.log('Font registered successfully');
+                // タイトル
+                doc.fontSize(20).text('Q&A Collection', { align: 'center' });
+                doc.moveDown(2);
+                // Q&Aを追加
+                qaItems.forEach((item, index) => {
+                    doc.fontSize(14).fillColor('blue').text(`Q${index + 1}: ${item.question}`);
+                    doc.moveDown(0.5);
+                    doc.fontSize(12).fillColor('black').text(`A: ${item.answer}`);
+                    doc.moveDown(1.5);
+                    // 動画推奨情報
+                    if (item.needsVideo) {
+                        doc.fontSize(10).fillColor('red').text('🎥 Video Recommended');
+                        if (item.videoReason) {
+                            doc.fontSize(9).fillColor('gray').text(`Reason: ${item.videoReason}`);
+                        }
+                        if (item.videoExamples && item.videoExamples.length > 0) {
+                            doc.fontSize(9).fillColor('gray').text(`Examples: ${item.videoExamples.join(', ')}`);
+                        }
+                        doc.moveDown(1);
+                    }
+                });
+                // PDF終了
+                doc.end();
+            }
+            catch (error) {
+                console.error('PDF content generation error:', error);
+                doc.end();
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'PDF content generation failed' });
+                }
+            }
+        }
+        else if (format === 'text') {
+            // テキストとして返す
+            let textContent = 'Q&A Collection\n\n';
+            qaItems.forEach((item, index) => {
+                textContent += `Q${index + 1}: ${item.question}\n`;
+                textContent += `A${index + 1}: ${item.answer}\n\n`;
+            });
+            res.setHeader('Content-Type', 'text/plain');
+            res.setHeader('Content-Disposition', 'attachment; filename="qa-collection.txt"');
+            res.send(textContent);
+        }
+        else {
+            res.status(400).json({ error: 'Unsupported format' });
+        }
+    }
+    catch (error) {
+        console.error('Export error:', error);
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        res.status(500).json({
+            error: 'Export failed',
+            details: error instanceof Error ? error.message : String(error)
+        });
+    }
+});
+// ヘルスチェックエンドポイント
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', version: '2.0' });
+});
+// フォントテストエンドポイント
+app.get('/api/test-font', (req, res) => {
+    const doc = new PDFDocument();
+    const chunks = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => {
+        const pdfBuffer = Buffer.concat(chunks);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="font-test.pdf"');
+        res.send(pdfBuffer);
+    });
+    const fontPath = '/home/user/webapp/fonts/NotoSansJP-Regular.ttf';
+    console.error(`Font path: ${fontPath}, exists: ${fs.existsSync(fontPath)}`);
+    try {
+        doc.registerFont('Japanese', fontPath);
+        doc.font('Japanese');
+        console.error('✅ Font registered and set');
+    }
+    catch (err) {
+        console.error('❌ Font error:', err);
+    }
+    doc.fontSize(20).text('日本語テスト Japanese Test', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(14).text('これは日本語のテキストです。');
+    doc.fontSize(14).text('This is English text.');
+    doc.fontSize(14).text('这是中文文本。');
+    doc.end();
+});
+// 静的ファイルを提供（APIルートの後に配置）
+app.use(express.static(distPath));
+// すべての非APIルートでindex.htmlを返す（SPA用）
+// Express 5では * の代わりに /.* を使用
+app.get(/^(?!\/api).*$/, (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+});
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Server is running on http://0.0.0.0:${port}`);
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('Dist path:', distPath);
+    console.log('API Key configured:', !!process.env.OPENAI_API_KEY);
+});
