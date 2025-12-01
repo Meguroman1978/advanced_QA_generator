@@ -8,9 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "tsx server.ts",
+    "server": "node --loader tsx --no-warnings server.ts",
     "server:advanced": "tsx server-advanced.ts",
-    "start": "npm run server:advanced"
+    "start": "tsx server.ts"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
