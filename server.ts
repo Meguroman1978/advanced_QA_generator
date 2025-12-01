@@ -81,7 +81,7 @@ function extractContent(html: string): string {
 }
 
 // OpenAI APIを使用して複数のQ&Aを生成
-async function generateQA(content: string, maxQA: number = 5, language: string = 'ja'): Promise<Array<{question: string, answer: string}>> {
+async function generateQA(content: string, maxQA: number = 5, language: string = 'ja', productUrl?: string): Promise<Array<{question: string, answer: string}>> {
   const apiKey = process.env.OPENAI_API_KEY;
   
   console.log('API Key check:', apiKey ? `Found (length: ${apiKey.length})` : 'NOT FOUND');
@@ -95,6 +95,12 @@ async function generateQA(content: string, maxQA: number = 5, language: string =
     apiKey: apiKey
   });
 
+  // コンテンツが少ない場合は想定Q&Aモードを有効化
+  const isLowContent = content.length < 500;
+  const contentNote = isLowContent 
+    ? `\n\n⚠️ 注意: ソーステキストが少ないため、一般的な知識や想定される質問・回答を含めて${maxQA}個のQ&Aを作成してください。\n商品やサービスについて、ユーザーが知りたいと思われる情報（使い方、特徴、利点、価格、比較、トラブルシューティングなど）を含めてください。`
+    : '';
+
   const languagePrompts: Record<string, string> = {
     ja: `あなたは日本語のQ&A作成専門家です。以下のテキストから、日本語で正確に${maxQA}個のQ&Aを作成してください。
 
@@ -103,6 +109,16 @@ async function generateQA(content: string, maxQA: number = 5, language: string =
 2. ✅ 数量: 必ず${maxQA}個の異なるQ&Aを生成すること
 3. ✅ 品質: 各Q&Aは完全にユニークで、異なる角度からの質問であること
 4. ❌ 重複禁止: 同じまたは類似した質問を繰り返さないこと
+5. 💡 情報不足対応: テキストに情報が少ない場合は、一般的な知識や想定Q&Aを追加すること
+
+【Q&A作成の視点】
+- 基本情報（概要、定義、特徴）
+- 使い方・手順
+- メリット・デメリット
+- 比較・選び方
+- トラブルシューティング
+- よくある質問
+- 応用・発展的な内容${contentNote}
 
 【出力フォーマット - 必ず守る】
 Q1: [日本語の質問]
@@ -116,7 +132,7 @@ A2: [日本語の詳細な回答]
 【ソーステキスト】
 ${content}
 
-【最重要】必ず${maxQA}個の異なるQ&Aを日本語で生成してください。英語や他の言語を使わないでください。`,
+【最重要】必ず${maxQA}個の異なるQ&Aを日本語で生成してください。情報が不足している場合は、一般的な知識や想定される質問を追加して${maxQA}個を達成してください。`,
     en: `You are an expert Q&A creator. Generate EXACTLY ${maxQA} Q&A pairs in ENGLISH from the text below.
 
 【ABSOLUTE RULES】
@@ -124,6 +140,16 @@ ${content}
 2. ✅ QUANTITY: Generate EXACTLY ${maxQA} distinct Q&A pairs
 3. ✅ QUALITY: Each Q&A must be completely unique with different angles
 4. ❌ NO DUPLICATES: Do NOT repeat similar questions
+5. 💡 LOW CONTENT HANDLING: If text lacks info, add common knowledge and anticipated Q&As
+
+【Q&A PERSPECTIVES】
+- Basic information (overview, definition, features)
+- How to use / procedures
+- Advantages / disadvantages
+- Comparison / selection criteria
+- Troubleshooting
+- Frequently asked questions
+- Advanced topics${contentNote}
 
 【OUTPUT FORMAT - MUST FOLLOW】
 Q1: [English question]
@@ -137,7 +163,7 @@ A2: [Detailed English answer]
 【SOURCE TEXT】
 ${content}
 
-【CRITICAL】Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH. Do NOT use Japanese or any other language.`,
+【CRITICAL】Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH. If information is limited, add general knowledge and anticipated questions to reach ${maxQA} Q&As.`,
     zh: `你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
 
 【绝对规则】
@@ -145,6 +171,16 @@ ${content}
 2. ✅ 数量: 必须生成正好${maxQA}个不同的问答对
 3. ✅ 质量: 每个问答对必须完全独特，从不同角度提问
 4. ❌ 禁止重复: 不要重复相似的问题
+5. 💡 信息不足处理: 如果文本信息少，添加常识和预期的问答
+
+【问答创作视角】
+- 基本信息（概述、定义、特点）
+- 使用方法、步骤
+- 优点、缺点
+- 比较、选择标准
+- 故障排除
+- 常见问题
+- 高级主题${contentNote}
 
 【输出格式 - 必须遵守】
 Q1: [中文问题]
@@ -158,7 +194,7 @@ A2: [详细的中文答案]
 【源文本】
 ${content}
 
-【最重要】必须用中文生成正好${maxQA}个不同的问答对。不要使用英文或其他语言。`
+【最重要】必须用中文生成正好${maxQA}个不同的问答对。如果信息有限，添加常识和预期问题以达到${maxQA}个问答。`
   };
 
   try {
@@ -283,13 +319,92 @@ ${content}
     
     console.log(`After deduplication: ${uniqueQA.length} unique Q&A items (removed ${qaItems.length - uniqueQA.length} duplicates)`);
     
-    // 不足している場合は警告
+    // 生成数が70%未満の場合は再試行または補完
     if (uniqueQA.length < maxQA * 0.7) {
-      console.warn(`Warning: Requested ${maxQA} Q&As but only generated ${uniqueQA.length} unique items`);
+      console.warn(`⚠️ Warning: Generated ${uniqueQA.length} Q&As but requested ${maxQA}. Attempting to supplement...`);
+      
+      // 追加生成を試みる
+      const needed = maxQA - uniqueQA.length;
+      console.log(`Attempting to generate ${needed} additional Q&As...`);
+      
+      try {
+        const supplementPrompt = language === 'ja' 
+          ? `以下の既存のQ&Aとは異なる、新しい${needed}個のQ&Aを日本語で生成してください。\n\n既存のQ&A:\n${uniqueQA.map((qa, i) => `Q${i+1}: ${qa.question}`).join('\n')}\n\n元のテキスト:\n${content}\n\n必ず${needed}個の全く新しいQ&Aを生成してください。`
+          : language === 'zh'
+          ? `生成${needed}个与以下现有问答不同的新问答（中文）。\n\n现有问答:\n${uniqueQA.map((qa, i) => `Q${i+1}: ${qa.question}`).join('\n')}\n\n原文:\n${content}\n\n必须生成${needed}个全新的问答。`
+          : `Generate ${needed} NEW Q&A pairs in ENGLISH that are different from the existing ones below.\n\nExisting Q&As:\n${uniqueQA.map((qa, i) => `Q${i+1}: ${qa.question}`).join('\n')}\n\nOriginal text:\n${content}\n\nMust generate exactly ${needed} completely new Q&As.`;
+        
+        const supplementResponse = await openai.chat.completions.create({
+          model: model,
+          messages: [
+            {
+              role: 'system',
+              content: `Generate ${needed} additional unique Q&A pairs in ${targetLanguage}.`
+            },
+            {
+              role: 'user',
+              content: supplementPrompt
+            }
+          ],
+          temperature: 0.8,
+          max_tokens: Math.min(needed * 120 + 500, maxTokensLimit)
+        });
+        
+        const supplementText = supplementResponse.choices[0]?.message?.content || '';
+        console.log(`[Supplement] Generated ${supplementText.length} chars`);
+        
+        // 追加Q&Aをパース
+        const supplementLines = supplementText.split('\n');
+        let suppQ = '';
+        let suppA = '';
+        let inSuppAnswer = false;
+        
+        for (const line of supplementLines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          
+          const qMatch = trimmed.match(/^Q\d+[:：]?\s*(.+)$/i);
+          const aMatch = trimmed.match(/^A\d+[:：]?\s*(.+)$/i);
+          
+          if (qMatch) {
+            if (suppQ && suppA) {
+              const qLower = suppQ.toLowerCase().trim();
+              if (!seenQuestions.has(qLower)) {
+                uniqueQA.push({ question: suppQ.trim(), answer: suppA.trim() });
+                seenQuestions.add(qLower);
+                console.log(`Added supplement Q&A: "${suppQ.substring(0, 50)}..."`);
+              }
+            }
+            suppQ = qMatch[1].trim();
+            suppA = '';
+            inSuppAnswer = false;
+          } else if (aMatch) {
+            suppA = aMatch[1].trim();
+            inSuppAnswer = true;
+          } else if (inSuppAnswer && suppA) {
+            suppA += ' ' + trimmed;
+          }
+        }
+        
+        // 最後の追加Q&A
+        if (suppQ && suppA) {
+          const qLower = suppQ.toLowerCase().trim();
+          if (!seenQuestions.has(qLower)) {
+            uniqueQA.push({ question: suppQ.trim(), answer: suppA.trim() });
+            console.log(`Added final supplement Q&A: "${suppQ.substring(0, 50)}..."`);
+          }
+        }
+        
+        console.log(`✅ After supplementing: ${uniqueQA.length} total Q&As`);
+      } catch (suppErr) {
+        console.error('Failed to generate supplement Q&As:', suppErr);
+      }
     }
     
     // maxQAの数に制限（超過分はカット）
-    return uniqueQA.slice(0, maxQA);
+    const finalQAs = uniqueQA.slice(0, maxQA);
+    console.log(`📊 Final: Returning ${finalQAs.length} Q&As (requested: ${maxQA})`);
+    return finalQAs;
   } catch (error) {
     throw new Error(`Failed to generate Q&A: ${error}`);
   }
@@ -335,7 +450,7 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
 
     // ステップ3: OpenAI APIで複数のQ&Aを生成
     console.log(`[GENERATION] Starting Q&A generation with maxQA=${maxQA}, language=${language}`);
-    const qaList = await generateQA(extractedContent, maxQA, language);
+    const qaList = await generateQA(extractedContent, maxQA, language, url);
     console.log(`[GENERATION] Generated ${qaList.length} Q&A items`);
 
     // 動画推奨が必要かどうかを判定する関数
