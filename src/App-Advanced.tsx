@@ -374,8 +374,15 @@ function AppAdvanced() {
             }),
           });
 
+          console.log(`✅ Export response for ${format}:`, response.status, response.statusText);
+          
           if (response.ok) {
+            const contentType = response.headers.get('Content-Type');
+            console.log(`📄 Content-Type for ${format}:`, contentType);
+            
             const blob = await response.blob();
+            console.log(`📦 Blob size for ${format}:`, blob.size, 'bytes');
+            
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -385,6 +392,8 @@ function AppAdvanced() {
             
             document.body.appendChild(a);
             a.click();
+            console.log(`✅ Download triggered for ${format}`);
+            
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
             
@@ -392,8 +401,8 @@ function AppAdvanced() {
             await new Promise(resolve => setTimeout(resolve, 500));
           } else {
             const errorText = await response.text();
-            console.error(`Export failed for ${format}:`, response.status, errorText);
-            throw new Error(`${format} export failed: ${response.status}`);
+            console.error(`❌ Export failed for ${format}:`, response.status, errorText);
+            throw new Error(`${format} export failed: ${response.status} - ${errorText}`);
           }
         } catch (formatErr) {
           console.error(`Failed to export ${format}:`, formatErr);

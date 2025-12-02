@@ -96,10 +96,10 @@ async function generateQA(content: string, maxQA: number = 5, language: string =
     apiKey: apiKey
   });
 
-  // コンテンツが少ない場合は想定Q&Aモードを有効化
+  // コンテンツが少ない場合の対応
   const isLowContent = content.length < 500;
   const contentNote = isLowContent 
-    ? `\n\n⚠️ 注意: ソーステキストが少ないため、一般的な知識や想定される質問・回答を含めて${maxQA}個のQ&Aを作成してください。\n商品やサービスについて、ユーザーが知りたいと思われる情報（使い方、特徴、利点、価格、比較、トラブルシューティングなど）を含めてください。`
+    ? `\n\n⚠️ 注意: ソーステキストが少ない場合でも、必ずソーステキストの情報のみを使用してください。外部情報や一般知識を追加しないでください。テキストから読み取れる情報を複数の角度から深掘りして${maxQA}個のQ&Aを作成してください。`
     : '';
 
   const languagePrompts: Record<string, string> = {
@@ -110,30 +110,35 @@ async function generateQA(content: string, maxQA: number = 5, language: string =
 2. ✅ 数量: 必ず${maxQA}個の異なるQ&Aを生成すること
 3. ✅ 品質: 各Q&Aは完全にユニークで、異なる角度からの質問であること
 4. ❌ 重複禁止: 同じまたは類似した質問を繰り返さないこと
-5. 💡 情報不足対応: テキストに情報が少ない場合は、一般的な知識や想定Q&Aを追加すること
+5. 🚫 【最重要】ソーステキストに書かれている情報のみを使用すること
+   - 外部の知識や一般常識を追加しないこと
+   - ソーステキストに記載されていない商品や情報について言及しないこと
+   - このウェブサイトで紹介・販売されている商品の情報のみ抽出すること
 
-【Q&A作成の視点】
-- 基本情報（概要、定義、特徴）
-- 使い方・手順
-- メリット・デメリット
-- 比較・選び方
-- トラブルシューティング
-- よくある質問
-- 応用・発展的な内容${contentNote}
+【Q&A作成の視点】（すべてソーステキストの情報のみから）
+- このサイトで紹介されている商品・サービスの基本情報
+- このサイトに記載されている使い方・手順
+- このサイトに記載されているメリット・特徴
+- このサイトに記載されている価格・仕様
+- このサイトに記載されている注意事項
+- ソーステキストから読み取れる情報を複数の角度から深掘り${contentNote}
 
 【出力フォーマット - 必ず守る】
 Q1: [日本語の質問]
-A1: [日本語の詳細な回答]
+A1: [日本語の詳細な回答 - ソーステキストの情報のみ]
 
 Q2: [日本語の質問]
-A2: [日本語の詳細な回答]
+A2: [日本語の詳細な回答 - ソーステキストの情報のみ]
 
 ...Q${maxQA}まで続ける
 
 【ソーステキスト】
 ${content}
 
-【最重要】必ず${maxQA}個の異なるQ&Aを日本語で生成してください。情報が不足している場合は、一般的な知識や想定される質問を追加して${maxQA}個を達成してください。`,
+【最重要】
+- 必ず${maxQA}個の異なるQ&Aを日本語で生成してください
+- すべての回答はソーステキストに記載されている情報のみを使用してください
+- ソーステキストに記載されていない商品や情報については一切言及しないでください`,
     en: `You are an expert Q&A creator. Generate EXACTLY ${maxQA} Q&A pairs in ENGLISH from the text below.
 
 【ABSOLUTE RULES】
@@ -141,23 +146,25 @@ ${content}
 2. ✅ QUANTITY: Generate EXACTLY ${maxQA} distinct Q&A pairs
 3. ✅ QUALITY: Each Q&A must be completely unique with different angles
 4. ❌ NO DUPLICATES: Do NOT repeat similar questions
-5. 💡 LOW CONTENT HANDLING: If text lacks info, add common knowledge and anticipated Q&As
+5. 🚫 【CRITICAL】Use ONLY information from the source text
+   - Do NOT add external knowledge or general information
+   - Do NOT mention products not listed in the source text
+   - Extract information ONLY about products/services on THIS website
 
-【Q&A PERSPECTIVES】
-- Basic information (overview, definition, features)
-- How to use / procedures
-- Advantages / disadvantages
-- Comparison / selection criteria
-- Troubleshooting
-- Frequently asked questions
-- Advanced topics${contentNote}
+【Q&A PERSPECTIVES】(All from source text only)
+- Products/services introduced on this site
+- Usage/procedures mentioned in this text
+- Benefits/features stated in this text
+- Prices/specifications listed in this text
+- Notes/warnings from this text
+- Deep dive into source text from multiple angles${contentNote}
 
 【OUTPUT FORMAT - MUST FOLLOW】
 Q1: [English question]
-A1: [Detailed English answer]
+A1: [Detailed English answer - source text only]
 
 Q2: [English question]
-A2: [Detailed English answer]
+A2: [Detailed English answer - source text only]
 
 ...continue to Q${maxQA}
 
@@ -232,7 +239,7 @@ ${content}
       messages: [
         {
           role: 'system',
-          content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct. IMPORTANT: Generate ALL ${maxQA} pairs, do not stop early.`
+          content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct. CRITICAL RULE: Use ONLY information from the provided source text. Do NOT add external knowledge or mention products not in the source text. IMPORTANT: Generate ALL ${maxQA} pairs, do not stop early.`
         },
         {
           role: 'user',
@@ -578,14 +585,16 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
   try {
     const { qaItems, format } = req.body;
     
-    console.log(`Export request: format=${format}, items=${qaItems?.length}`);
+    console.log(`📥 Export request received: format=${format}, items=${qaItems?.length}`);
+    console.log(`📋 Request headers:`, req.headers['content-type']);
     
     if (!qaItems || !Array.isArray(qaItems) || qaItems.length === 0) {
+      console.error('❌ Invalid request: qaItems is missing or empty');
       return res.status(400).json({ error: 'Q&A items are required' });
     }
     
     if (format === 'pdf') {
-      console.log('Starting PDF generation...');
+      console.log('📕 Starting PDF generation...');
       // PDFKitを使用してPDFを生成（同期的に）
       // 複数のパスを試行（Docker環境を考慮）
       const fontPaths = [
@@ -620,17 +629,20 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
       doc.on('end', () => {
         const pdfBuffer = Buffer.concat(chunks);
-        console.log(`PDF generated: ${pdfBuffer.length} bytes`);
+        console.log(`✅ PDF generated successfully: ${pdfBuffer.length} bytes`);
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'attachment; filename="qa-collection.pdf"');
+        res.setHeader('Content-Length', pdfBuffer.length.toString());
+        console.log(`✅ Sending PDF to client...`);
         res.send(pdfBuffer);
       });
       
       // エラーハンドラ
       doc.on('error', (err: Error) => {
-        console.error('PDF generation error:', err);
+        console.error('❌ PDF generation error:', err);
+        console.error('❌ Error stack:', err.stack);
         if (!res.headersSent) {
-          res.status(500).json({ error: 'PDF generation failed' });
+          res.status(500).json({ error: 'PDF generation failed', details: err.message });
         }
       });
       
@@ -698,14 +710,18 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
       }
     } else if (format === 'text') {
       // テキストとして返す
+      console.log('📄 Starting TXT generation...');
       let textContent = 'Q&A Collection\n\n';
       qaItems.forEach((item: any, index: number) => {
         textContent += `Q${index + 1}: ${item.question}\n`;
         textContent += `A${index + 1}: ${item.answer}\n\n`;
       });
       
-      res.setHeader('Content-Type', 'text/plain');
+      console.log(`✅ TXT generated: ${textContent.length} characters`);
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="qa-collection.txt"');
+      res.setHeader('Content-Length', Buffer.byteLength(textContent, 'utf8').toString());
+      console.log(`✅ Sending TXT to client...`);
       res.send(textContent);
     } else {
       res.status(400).json({ error: 'Unsupported format' });
