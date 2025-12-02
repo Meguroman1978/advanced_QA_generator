@@ -1,16 +1,14 @@
 services:
-  # 統合サーバー（フロントエンド + バックエンド）
   - type: web
-    name: advanced-qa-generator
-    env: node
-    region: singapore
+    name: qa-generator
+    runtime: docker
     plan: free
-    buildCommand: npm install --production=false && npm run build
-    startCommand: npm start
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: NODE_ENV
         value: production
       - key: OPENAI_API_KEY
-        sync: false  # Render.comのダッシュボードで手動設定
-      - key: NPM_CONFIG_PRODUCTION
-        value: false
+        sync: false
+    healthCheckPath: /api/health
