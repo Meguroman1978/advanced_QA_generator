@@ -22,4 +22,4 @@ primary_region = "nrt"  # Tokyo
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 256
+  memory_mb = 512  # 256MBから512MBに増量（安定性向上）

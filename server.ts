@@ -39,29 +39,77 @@ interface WorkflowResponse {
 
 // HTTPリクエストを実行してHTMLを取得（通常のブラウザとして振る舞う）
 async function fetchWebsite(url: string): Promise<string> {
-  try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Cache-Control': 'max-age=0'
-      },
-      timeout: 15000,
-      maxRedirects: 5,
-      validateStatus: (status) => status < 500 // 500未満のステータスコードを受け入れる
-    });
-    return response.data;
-  } catch (error) {
-    throw new Error(`Failed to fetch website: ${error}`);
+  console.log(`🌐 Fetching website: ${url}`);
+  
+  // リトライ設定
+  const maxRetries = 3;
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`📡 Attempt ${attempt}/${maxRetries} to fetch ${url}`);
+      
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+          'Cache-Control': 'max-age=0'
+        },
+        timeout: 30000, // 30秒に延長
+        maxRedirects: 5,
+        validateStatus: (status) => status < 500 // 500未満のステータスコードを受け入れる
+      });
+      
+      console.log(`✅ Successfully fetched ${url} (${response.data.length} bytes)`);
+      return response.data;
+    } catch (error: any) {
+      lastError = error;
+      
+      // エラー詳細をログ
+      if (error.response) {
+        // サーバーからレスポンスが返ってきた場合
+        console.error(`❌ Attempt ${attempt} failed with status ${error.response.status}`);
+        console.error(`   Response headers:`, error.response.headers);
+        console.error(`   Response data:`, error.response.data?.substring(0, 200));
+      } else if (error.request) {
+        // リクエストは送信されたがレスポンスがない場合
+        console.error(`❌ Attempt ${attempt} failed: No response received`);
+        console.error(`   Request details:`, {
+          url: error.config?.url,
+          method: error.config?.method,
+          timeout: error.config?.timeout
+        });
+      } else {
+        // リクエスト設定時のエラー
+        console.error(`❌ Attempt ${attempt} failed:`, error.message);
+      }
+      
+      // 最後の試行でなければ待機してリトライ
+      if (attempt < maxRetries) {
+        const waitTime = attempt * 2000; // 2秒、4秒と増加
+        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
   }
+  
+  // すべてのリトライが失敗した場合
+  const errorMessage = lastError?.response 
+    ? `Failed to fetch website (Status: ${lastError.response.status})`
+    : lastError?.request
+    ? `Failed to fetch website: No response from server (timeout or network error)`
+    : `Failed to fetch website: ${lastError?.message || 'Unknown error'}`;
+  
+  console.error(`🚫 All ${maxRetries} attempts failed for ${url}`);
+  throw new Error(errorMessage);
 }
 
 // HTMLからテキストコンテンツを抽出
@@ -571,11 +619,37 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
     console.log(`✅ Response: Generated ${qaItems.length} Q&A items`);
     console.log(`📤 Sending response with ${JSON.stringify(responseData).length} bytes`);
     res.json(responseData);
-  } catch (error) {
-    console.error('Workflow error:', error);
+  } catch (error: any) {
+    console.error('❌ Workflow error:', error);
+    
+    // 詳細なエラー情報を取得
+    let errorMessage = 'Unknown error occurred';
+    let errorDetails = '';
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      errorDetails = error.stack || '';
+    }
+    
+    // Axiosエラーの場合はさらに詳細を追加
+    if (error.response) {
+      errorMessage = `HTTP Error ${error.response.status}: ${error.response.statusText}`;
+      errorDetails = `Response data: ${JSON.stringify(error.response.data).substring(0, 200)}`;
+      console.error('  Response status:', error.response.status);
+      console.error('  Response headers:', error.response.headers);
+    } else if (error.request) {
+      errorMessage = 'No response from server (timeout or network error)';
+      errorDetails = 'The request was sent but no response was received. This could be due to timeout, network issues, or the server being down.';
+      console.error('  Request was sent but no response received');
+    }
+    
+    console.error('  Error message:', errorMessage);
+    console.error('  Error details:', errorDetails);
+    
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: errorMessage,
+      details: errorDetails
     });
   }
 });
