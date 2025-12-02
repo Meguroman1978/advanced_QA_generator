@@ -220,12 +220,16 @@ ${content}
     
     console.log(`[OpenAI] Model: ${model}, max_tokens: ${estimatedTokens}, target: ${maxQA} Q&As in ${targetLanguage}`);
     
+    // タイムアウトを長めに設定（特に大量生成時）
+    const timeoutMs = maxQA > 30 ? 120000 : 60000; // 30問超える場合は2分、それ以下は1分
+    console.log(`[OpenAI] Timeout set to: ${timeoutMs}ms`);
+    
     const response = await openai.chat.completions.create({
       model: model,
       messages: [
         {
           role: 'system',
-          content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct.`
+          content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct. IMPORTANT: Generate ALL ${maxQA} pairs, do not stop early.`
         },
         {
           role: 'user',
@@ -233,15 +237,18 @@ ${content}
         }
       ],
       temperature: 0.7,
-      max_tokens: estimatedTokens
+      max_tokens: estimatedTokens,
+      timeout: timeoutMs
     });
 
     const generatedText = response.choices[0]?.message?.content || '';
     const tokensUsed = response.usage?.total_tokens || 0;
     console.log(`[OpenAI] Response: ${generatedText.length} chars, ${tokensUsed} tokens used`);
+    console.log(`[OpenAI] Finish reason: ${response.choices[0]?.finish_reason || 'unknown'}`);
     
-    // 生成されたテキストの最初の200文字をログ出力（デバッグ用）
-    console.log(`[OpenAI] First 200 chars: ${generatedText.substring(0, 200)}...`);
+    // 生成されたテキストの最初の500文字をログ出力（デバッグ用）
+    console.log(`[OpenAI] First 500 chars: ${generatedText.substring(0, 500)}...`);
+    console.log(`[OpenAI] Last 300 chars: ...${generatedText.substring(Math.max(0, generatedText.length - 300))}`);
     
     // Q&Aをパース（改善版）
     const qaItems: Array<{question: string, answer: string}> = [];
@@ -283,7 +290,16 @@ ${content}
       qaItems.push({ question: currentQ.trim(), answer: currentA.trim() });
     }
     
-    console.log(`Parsed ${qaItems.length} Q&A items from response`);
+    console.log(`📊 Parsed ${qaItems.length} Q&A items from response`);
+    if (qaItems.length > 0) {
+      console.log(`   First parsed Q: "${qaItems[0].question.substring(0, 60)}..."`);
+      console.log(`   Last parsed Q: "${qaItems[qaItems.length - 1].question.substring(0, 60)}..."`);
+    }
+    if (qaItems.length < maxQA * 0.5) {
+      console.error(`⚠️ CRITICAL: Only parsed ${qaItems.length}/${maxQA} Q&As - parsing may have failed!`);
+      console.error(`   Generated text length: ${generatedText.length} chars`);
+      console.error(`   Expected ~${maxQA * 150} chars for ${maxQA} Q&As`);
+    }
     
     // 重複を除去（質問と回答の両方をチェック）
     const uniqueQA: Array<{question: string, answer: string}> = [];
@@ -613,13 +629,27 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
       try {
         // フォント登録
         console.log(`📝 Attempting to register font: ${fontPath}`);
-        doc.registerFont('NotoSans', fontPath);
-        doc.font('NotoSans');
-        console.log('✅ Font registered successfully');
+        let fontRegistered = false;
+        try {
+          doc.registerFont('NotoSans', fontPath);
+          doc.font('NotoSans');
+          fontRegistered = true;
+          console.log('✅ Font registered successfully');
+        } catch (fontErr) {
+          console.warn('⚠️ Font registration failed, using default font:', fontErr);
+          console.warn('   PDF will be generated without Japanese font support');
+          // デフォルトフォントを使用（英数字のみ）
+          doc.font('Helvetica');
+        }
         
         // タイトル
         doc.fontSize(20).text('Q&A Collection', { align: 'center' });
         doc.moveDown(2);
+        
+        if (!fontRegistered) {
+          doc.fontSize(10).fillColor('red').text('Warning: Japanese font not available', { align: 'center' });
+          doc.moveDown(1);
+        }
         
         // Q&Aを追加
         qaItems.forEach((item: any, index: number) => {
