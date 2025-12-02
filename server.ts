@@ -5,6 +5,7 @@ import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import path from 'path';
+// @ts-ignore
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 
@@ -239,7 +240,8 @@ ${content}
         }
       ],
       temperature: 0.7,
-      max_tokens: estimatedTokens,
+      max_tokens: estimatedTokens
+    }, {
       timeout: timeoutMs
     });
 

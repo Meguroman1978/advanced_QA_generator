@@ -5,11 +5,12 @@ import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import path from 'path';
+// @ts-ignore
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 dotenv.config();
 const app = express();
-const port = process.env.PORT || 3001;
+const port = parseInt(process.env.PORT || '3001', 10);
 app.use(cors());
 app.use(express.json());
 // 静的ファイルのパスを定義（後で使用）
@@ -55,7 +56,7 @@ function extractContent(html) {
         .substring(0, 4000); // OpenAI APIの制限を考慮して4000文字に制限
 }
 // OpenAI APIを使用して複数のQ&Aを生成
-async function generateQA(content, maxQA = 5, language = 'ja') {
+async function generateQA(content, maxQA = 5, language = 'ja', productUrl) {
     const apiKey = process.env.OPENAI_API_KEY;
     console.log('API Key check:', apiKey ? `Found (length: ${apiKey.length})` : 'NOT FOUND');
     console.log('Generating Q&A:', { maxQA, language, contentLength: content.length });
@@ -65,6 +66,11 @@ async function generateQA(content, maxQA = 5, language = 'ja') {
     const openai = new OpenAI({
         apiKey: apiKey
     });
+    // コンテンツが少ない場合は想定Q&Aモードを有効化
+    const isLowContent = content.length < 500;
+    const contentNote = isLowContent
+        ? `\n\n⚠️ 注意: ソーステキストが少ないため、一般的な知識や想定される質問・回答を含めて${maxQA}個のQ&Aを作成してください。\n商品やサービスについて、ユーザーが知りたいと思われる情報（使い方、特徴、利点、価格、比較、トラブルシューティングなど）を含めてください。`
+        : '';
     const languagePrompts = {
         ja: `あなたは日本語のQ&A作成専門家です。以下のテキストから、日本語で正確に${maxQA}個のQ&Aを作成してください。
 
@@ -73,6 +79,16 @@ async function generateQA(content, maxQA = 5, language = 'ja') {
 2. ✅ 数量: 必ず${maxQA}個の異なるQ&Aを生成すること
 3. ✅ 品質: 各Q&Aは完全にユニークで、異なる角度からの質問であること
 4. ❌ 重複禁止: 同じまたは類似した質問を繰り返さないこと
+5. 💡 情報不足対応: テキストに情報が少ない場合は、一般的な知識や想定Q&Aを追加すること
+
+【Q&A作成の視点】
+- 基本情報（概要、定義、特徴）
+- 使い方・手順
+- メリット・デメリット
+- 比較・選び方
+- トラブルシューティング
+- よくある質問
+- 応用・発展的な内容${contentNote}
 
 【出力フォーマット - 必ず守る】
 Q1: [日本語の質問]
@@ -86,7 +102,7 @@ A2: [日本語の詳細な回答]
 【ソーステキスト】
 ${content}
 
-【最重要】必ず${maxQA}個の異なるQ&Aを日本語で生成してください。英語や他の言語を使わないでください。`,
+【最重要】必ず${maxQA}個の異なるQ&Aを日本語で生成してください。情報が不足している場合は、一般的な知識や想定される質問を追加して${maxQA}個を達成してください。`,
         en: `You are an expert Q&A creator. Generate EXACTLY ${maxQA} Q&A pairs in ENGLISH from the text below.
 
 【ABSOLUTE RULES】
@@ -94,6 +110,16 @@ ${content}
 2. ✅ QUANTITY: Generate EXACTLY ${maxQA} distinct Q&A pairs
 3. ✅ QUALITY: Each Q&A must be completely unique with different angles
 4. ❌ NO DUPLICATES: Do NOT repeat similar questions
+5. 💡 LOW CONTENT HANDLING: If text lacks info, add common knowledge and anticipated Q&As
+
+【Q&A PERSPECTIVES】
+- Basic information (overview, definition, features)
+- How to use / procedures
+- Advantages / disadvantages
+- Comparison / selection criteria
+- Troubleshooting
+- Frequently asked questions
+- Advanced topics${contentNote}
 
 【OUTPUT FORMAT - MUST FOLLOW】
 Q1: [English question]
@@ -107,7 +133,7 @@ A2: [Detailed English answer]
 【SOURCE TEXT】
 ${content}
 
-【CRITICAL】Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH. Do NOT use Japanese or any other language.`,
+【CRITICAL】Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH. If information is limited, add general knowledge and anticipated questions to reach ${maxQA} Q&As.`,
         zh: `你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
 
 【绝对规则】
@@ -115,6 +141,16 @@ ${content}
 2. ✅ 数量: 必须生成正好${maxQA}个不同的问答对
 3. ✅ 质量: 每个问答对必须完全独特，从不同角度提问
 4. ❌ 禁止重复: 不要重复相似的问题
+5. 💡 信息不足处理: 如果文本信息少，添加常识和预期的问答
+
+【问答创作视角】
+- 基本信息（概述、定义、特点）
+- 使用方法、步骤
+- 优点、缺点
+- 比较、选择标准
+- 故障排除
+- 常见问题
+- 高级主题${contentNote}
 
 【输出格式 - 必须遵守】
 Q1: [中文问题]
@@ -128,7 +164,7 @@ A2: [详细的中文答案]
 【源文本】
 ${content}
 
-【最重要】必须用中文生成正好${maxQA}个不同的问答对。不要使用英文或其他语言。`
+【最重要】必须用中文生成正好${maxQA}个不同的问答对。如果信息有限，添加常识和预期问题以达到${maxQA}个问答。`
     };
     try {
         const prompt = languagePrompts[language] || languagePrompts['ja'];
@@ -140,20 +176,24 @@ ${content}
         };
         const targetLanguage = languageNames[language] || languageNames['ja'];
         // maxQAに応じてmax_tokensを調整
-        // gpt-3.5-turbo: 最大4096トークン
-        // gpt-4o-mini: 最大16384トークン
-        // 80問の場合は約6400トークン必要なので、gpt-4o-miniを使用
-        const useGPT4 = maxQA > 50;
+        // gpt-3.5-turbo: 最大4096トークン（30問まで）
+        // gpt-4o-mini: 最大16384トークン（30問以上）
+        // 30問以上はgpt-4o-miniを使用（より大きなトークン制限）
+        const useGPT4 = maxQA > 30; // 閾値を50→30に変更
         const model = useGPT4 ? 'gpt-4o-mini' : 'gpt-3.5-turbo';
         const maxTokensLimit = useGPT4 ? 16384 : 4096;
         const estimatedTokens = Math.min(maxQA * 120 + 1500, maxTokensLimit);
+        console.log(`[MODEL SELECTION] maxQA=${maxQA}, useGPT4=${useGPT4}, model=${model}, maxTokensLimit=${maxTokensLimit}`);
         console.log(`[OpenAI] Model: ${model}, max_tokens: ${estimatedTokens}, target: ${maxQA} Q&As in ${targetLanguage}`);
+        // タイムアウトを長めに設定（特に大量生成時）
+        const timeoutMs = maxQA > 30 ? 120000 : 60000; // 30問超える場合は2分、それ以下は1分
+        console.log(`[OpenAI] Timeout set to: ${timeoutMs}ms`);
         const response = await openai.chat.completions.create({
             model: model,
             messages: [
                 {
                     role: 'system',
-                    content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct.`
+                    content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct. IMPORTANT: Generate ALL ${maxQA} pairs, do not stop early.`
                 },
                 {
                     role: 'user',
@@ -162,12 +202,16 @@ ${content}
             ],
             temperature: 0.7,
             max_tokens: estimatedTokens
+        }, {
+            timeout: timeoutMs
         });
         const generatedText = response.choices[0]?.message?.content || '';
         const tokensUsed = response.usage?.total_tokens || 0;
         console.log(`[OpenAI] Response: ${generatedText.length} chars, ${tokensUsed} tokens used`);
-        // 生成されたテキストの最初の200文字をログ出力（デバッグ用）
-        console.log(`[OpenAI] First 200 chars: ${generatedText.substring(0, 200)}...`);
+        console.log(`[OpenAI] Finish reason: ${response.choices[0]?.finish_reason || 'unknown'}`);
+        // 生成されたテキストの最初の500文字をログ出力（デバッグ用）
+        console.log(`[OpenAI] First 500 chars: ${generatedText.substring(0, 500)}...`);
+        console.log(`[OpenAI] Last 300 chars: ...${generatedText.substring(Math.max(0, generatedText.length - 300))}`);
         // Q&Aをパース（改善版）
         const qaItems = [];
         const lines = generatedText.split('\n');
@@ -207,7 +251,16 @@ ${content}
         if (currentQ && currentA) {
             qaItems.push({ question: currentQ.trim(), answer: currentA.trim() });
         }
-        console.log(`Parsed ${qaItems.length} Q&A items from response`);
+        console.log(`📊 Parsed ${qaItems.length} Q&A items from response`);
+        if (qaItems.length > 0) {
+            console.log(`   First parsed Q: "${qaItems[0].question.substring(0, 60)}..."`);
+            console.log(`   Last parsed Q: "${qaItems[qaItems.length - 1].question.substring(0, 60)}..."`);
+        }
+        if (qaItems.length < maxQA * 0.5) {
+            console.error(`⚠️ CRITICAL: Only parsed ${qaItems.length}/${maxQA} Q&As - parsing may have failed!`);
+            console.error(`   Generated text length: ${generatedText.length} chars`);
+            console.error(`   Expected ~${maxQA * 150} chars for ${maxQA} Q&As`);
+        }
         // 重複を除去（質問と回答の両方をチェック）
         const uniqueQA = [];
         const seenQuestions = new Set();
@@ -236,12 +289,85 @@ ${content}
             }
         }
         console.log(`After deduplication: ${uniqueQA.length} unique Q&A items (removed ${qaItems.length - uniqueQA.length} duplicates)`);
-        // 不足している場合は警告
+        // 生成数が70%未満の場合は再試行または補完
         if (uniqueQA.length < maxQA * 0.7) {
-            console.warn(`Warning: Requested ${maxQA} Q&As but only generated ${uniqueQA.length} unique items`);
+            console.warn(`⚠️ Warning: Generated ${uniqueQA.length} Q&As but requested ${maxQA}. Attempting to supplement...`);
+            // 追加生成を試みる
+            const needed = maxQA - uniqueQA.length;
+            console.log(`Attempting to generate ${needed} additional Q&As...`);
+            try {
+                const supplementPrompt = language === 'ja'
+                    ? `以下の既存のQ&Aとは異なる、新しい${needed}個のQ&Aを日本語で生成してください。\n\n既存のQ&A:\n${uniqueQA.map((qa, i) => `Q${i + 1}: ${qa.question}`).join('\n')}\n\n元のテキスト:\n${content}\n\n必ず${needed}個の全く新しいQ&Aを生成してください。`
+                    : language === 'zh'
+                        ? `生成${needed}个与以下现有问答不同的新问答（中文）。\n\n现有问答:\n${uniqueQA.map((qa, i) => `Q${i + 1}: ${qa.question}`).join('\n')}\n\n原文:\n${content}\n\n必须生成${needed}个全新的问答。`
+                        : `Generate ${needed} NEW Q&A pairs in ENGLISH that are different from the existing ones below.\n\nExisting Q&As:\n${uniqueQA.map((qa, i) => `Q${i + 1}: ${qa.question}`).join('\n')}\n\nOriginal text:\n${content}\n\nMust generate exactly ${needed} completely new Q&As.`;
+                const supplementResponse = await openai.chat.completions.create({
+                    model: model,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `Generate ${needed} additional unique Q&A pairs in ${targetLanguage}.`
+                        },
+                        {
+                            role: 'user',
+                            content: supplementPrompt
+                        }
+                    ],
+                    temperature: 0.8,
+                    max_tokens: Math.min(needed * 120 + 500, maxTokensLimit)
+                });
+                const supplementText = supplementResponse.choices[0]?.message?.content || '';
+                console.log(`[Supplement] Generated ${supplementText.length} chars`);
+                // 追加Q&Aをパース
+                const supplementLines = supplementText.split('\n');
+                let suppQ = '';
+                let suppA = '';
+                let inSuppAnswer = false;
+                for (const line of supplementLines) {
+                    const trimmed = line.trim();
+                    if (!trimmed)
+                        continue;
+                    const qMatch = trimmed.match(/^Q\d+[:：]?\s*(.+)$/i);
+                    const aMatch = trimmed.match(/^A\d+[:：]?\s*(.+)$/i);
+                    if (qMatch) {
+                        if (suppQ && suppA) {
+                            const qLower = suppQ.toLowerCase().trim();
+                            if (!seenQuestions.has(qLower)) {
+                                uniqueQA.push({ question: suppQ.trim(), answer: suppA.trim() });
+                                seenQuestions.add(qLower);
+                                console.log(`Added supplement Q&A: "${suppQ.substring(0, 50)}..."`);
+                            }
+                        }
+                        suppQ = qMatch[1].trim();
+                        suppA = '';
+                        inSuppAnswer = false;
+                    }
+                    else if (aMatch) {
+                        suppA = aMatch[1].trim();
+                        inSuppAnswer = true;
+                    }
+                    else if (inSuppAnswer && suppA) {
+                        suppA += ' ' + trimmed;
+                    }
+                }
+                // 最後の追加Q&A
+                if (suppQ && suppA) {
+                    const qLower = suppQ.toLowerCase().trim();
+                    if (!seenQuestions.has(qLower)) {
+                        uniqueQA.push({ question: suppQ.trim(), answer: suppA.trim() });
+                        console.log(`Added final supplement Q&A: "${suppQ.substring(0, 50)}..."`);
+                    }
+                }
+                console.log(`✅ After supplementing: ${uniqueQA.length} total Q&As`);
+            }
+            catch (suppErr) {
+                console.error('Failed to generate supplement Q&As:', suppErr);
+            }
         }
         // maxQAの数に制限（超過分はカット）
-        return uniqueQA.slice(0, maxQA);
+        const finalQAs = uniqueQA.slice(0, maxQA);
+        console.log(`📊 Final: Returning ${finalQAs.length} Q&As (requested: ${maxQA})`);
+        return finalQAs;
     }
     catch (error) {
         throw new Error(`Failed to generate Q&A: ${error}`);
@@ -280,7 +406,7 @@ app.post('/api/workflow', async (req, res) => {
         const extractedContent = extractContent(html);
         // ステップ3: OpenAI APIで複数のQ&Aを生成
         console.log(`[GENERATION] Starting Q&A generation with maxQA=${maxQA}, language=${language}`);
-        const qaList = await generateQA(extractedContent, maxQA, language);
+        const qaList = await generateQA(extractedContent, maxQA, language, url);
         console.log(`[GENERATION] Generated ${qaList.length} Q&A items`);
         // 動画推奨が必要かどうかを判定する関数
         const needsVideoExplanation = (question, answer) => {
@@ -336,6 +462,11 @@ app.post('/api/workflow', async (req, res) => {
         });
         // 全Q&Aを結合した文字列も生成（後方互換性のため）
         const qaResult = qaList.map((qa, i) => `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`).join('\n\n');
+        console.log(`🔍 DEBUG - Before response:`);
+        console.log(`  - qaList.length: ${qaList.length}`);
+        console.log(`  - qaItems.length: ${qaItems.length}`);
+        console.log(`  - First Q&A: ${qaItems[0]?.question?.substring(0, 50) || 'N/A'}`);
+        console.log(`  - Last Q&A: ${qaItems[qaItems.length - 1]?.question?.substring(0, 50) || 'N/A'}`);
         // シンプルサーバー用のレスポンスフォーマット
         // robotsAllowedをdataの中に含める（フロントエンドがdata.dataを使用するため）
         const responseData = {
@@ -356,7 +487,8 @@ app.post('/api/workflow', async (req, res) => {
                 }
             }
         };
-        console.log(`Response: Generated ${qaItems.length} Q&A items`);
+        console.log(`✅ Response: Generated ${qaItems.length} Q&A items`);
+        console.log(`📤 Sending response with ${JSON.stringify(responseData).length} bytes`);
         res.json(responseData);
     }
     catch (error) {
@@ -417,12 +549,27 @@ app.post('/api/export/single', async (req, res) => {
             });
             try {
                 // フォント登録
-                doc.registerFont('NotoSans', fontPath);
-                doc.font('NotoSans');
-                console.log('Font registered successfully');
+                console.log(`📝 Attempting to register font: ${fontPath}`);
+                let fontRegistered = false;
+                try {
+                    doc.registerFont('NotoSans', fontPath);
+                    doc.font('NotoSans');
+                    fontRegistered = true;
+                    console.log('✅ Font registered successfully');
+                }
+                catch (fontErr) {
+                    console.warn('⚠️ Font registration failed, using default font:', fontErr);
+                    console.warn('   PDF will be generated without Japanese font support');
+                    // デフォルトフォントを使用（英数字のみ）
+                    doc.font('Helvetica');
+                }
                 // タイトル
                 doc.fontSize(20).text('Q&A Collection', { align: 'center' });
                 doc.moveDown(2);
+                if (!fontRegistered) {
+                    doc.fontSize(10).fillColor('red').text('Warning: Japanese font not available', { align: 'center' });
+                    doc.moveDown(1);
+                }
                 // Q&Aを追加
                 qaItems.forEach((item, index) => {
                     doc.fontSize(14).fillColor('blue').text(`Q${index + 1}: ${item.question}`);
@@ -445,10 +592,15 @@ app.post('/api/export/single', async (req, res) => {
                 doc.end();
             }
             catch (error) {
-                console.error('PDF content generation error:', error);
+                console.error('❌ PDF content generation error:', error);
+                console.error('Error details:', error instanceof Error ? error.message : String(error));
+                console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
                 doc.end();
                 if (!res.headersSent) {
-                    res.status(500).json({ error: 'PDF content generation failed' });
+                    res.status(500).json({
+                        error: 'PDF content generation failed',
+                        details: error instanceof Error ? error.message : String(error)
+                    });
                 }
             }
         }
