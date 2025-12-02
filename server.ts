@@ -209,14 +209,16 @@ ${content}
     const targetLanguage = languageNames[language] || languageNames['ja'];
     
     // maxQAに応じてmax_tokensを調整
-    // gpt-3.5-turbo: 最大4096トークン
-    // gpt-4o-mini: 最大16384トークン
+    // gpt-3.5-turbo: 最大4096トークン（30問まで）
+    // gpt-4o-mini: 最大16384トークン（30問以上）
     
-    // 80問の場合は約6400トークン必要なので、gpt-4o-miniを使用
-    const useGPT4 = maxQA > 50;
+    // 30問以上はgpt-4o-miniを使用（より大きなトークン制限）
+    const useGPT4 = maxQA > 30; // 閾値を50→30に変更
     const model = useGPT4 ? 'gpt-4o-mini' : 'gpt-3.5-turbo';
     const maxTokensLimit = useGPT4 ? 16384 : 4096;
     const estimatedTokens = Math.min(maxQA * 120 + 1500, maxTokensLimit);
+    
+    console.log(`[MODEL SELECTION] maxQA=${maxQA}, useGPT4=${useGPT4}, model=${model}, maxTokensLimit=${maxTokensLimit}`);
     
     console.log(`[OpenAI] Model: ${model}, max_tokens: ${estimatedTokens}, target: ${maxQA} Q&As in ${targetLanguage}`);
     
