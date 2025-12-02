@@ -587,13 +587,16 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
     if (format === 'pdf') {
       console.log('Starting PDF generation...');
       // PDFKitを使用してPDFを生成（同期的に）
-      // 複数のパスを試行
+      // 複数のパスを試行（Docker環境を考慮）
       const fontPaths = [
-        '/home/user/webapp/fonts/NotoSansJP-Regular.ttf',
-        path.join(process.cwd(), 'fonts', 'NotoSansJP-Regular.ttf'),
-        path.join(__dirname, 'fonts', 'NotoSansJP-Regular.ttf')
+        '/app/fonts/NotoSansJP-Regular.ttf',                        // Docker: /app/fonts/
+        path.join(process.cwd(), 'fonts', 'NotoSansJP-Regular.ttf'), // process.cwd()/fonts/
+        path.join(__dirname, 'fonts', 'NotoSansJP-Regular.ttf'),     // __dirname/fonts/
+        '/home/user/webapp/fonts/NotoSansJP-Regular.ttf'             // ローカル開発環境
       ];
-      console.log('Trying font paths:', fontPaths);
+      console.log('🔍 Trying font paths:', fontPaths);
+      console.log('📂 Current working directory:', process.cwd());
+      console.log('📂 __dirname:', __dirname);
       
       let fontPath = '';
       for (const p of fontPaths) {
@@ -605,8 +608,9 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
       }
       
       if (!fontPath) {
-        console.error('Font not found in any of these paths:', fontPaths);
-        return res.status(500).json({ error: 'Font file not found' });
+        console.warn('⚠️ Font not found in any of these paths:', fontPaths);
+        console.warn('⚠️ Will generate PDF with default font (Japanese text may not display correctly)');
+        // フォントが見つからなくてもPDFは生成する
       }
       
       const doc = new PDFDocument({ margin: 50 });
@@ -632,17 +636,20 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
       
       try {
         // フォント登録
-        console.log(`📝 Attempting to register font: ${fontPath}`);
         let fontRegistered = false;
-        try {
-          doc.registerFont('NotoSans', fontPath);
-          doc.font('NotoSans');
-          fontRegistered = true;
-          console.log('✅ Font registered successfully');
-        } catch (fontErr) {
-          console.warn('⚠️ Font registration failed, using default font:', fontErr);
-          console.warn('   PDF will be generated without Japanese font support');
-          // デフォルトフォントを使用（英数字のみ）
+        if (fontPath) {
+          console.log(`📝 Attempting to register font: ${fontPath}`);
+          try {
+            doc.registerFont('NotoSans', fontPath);
+            doc.font('NotoSans');
+            fontRegistered = true;
+            console.log('✅ Font registered successfully: NotoSans');
+          } catch (fontErr) {
+            console.warn('⚠️ Font registration failed:', fontErr);
+            doc.font('Helvetica');
+          }
+        } else {
+          console.warn('⚠️ No font path found, using default font');
           doc.font('Helvetica');
         }
         

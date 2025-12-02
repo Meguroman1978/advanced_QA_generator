@@ -33,6 +33,11 @@ RUN npm ci --include=dev
 # Copy source code
 COPY . .
 
+# Ensure fonts directory exists and has correct permissions
+RUN mkdir -p /app/fonts && \
+    chmod 755 /app/fonts && \
+    ls -la /app/fonts/
+
 # Build the application
 RUN npm run build
 
