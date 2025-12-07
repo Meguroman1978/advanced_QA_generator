@@ -253,6 +253,71 @@ body {
   border-left-color: var(--success-color);
 }
 
+/* Export Options Styles */
+.export-options {
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid var(--success-color);
+}
+
+.export-description {
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.export-buttons {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+}
+
+.export-button {
+  flex: 1;
+  min-width: 150px;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: var(--shadow);
+  color: white;
+}
+
+.export-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.export-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pdf-button {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+.text-button {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+}
+
+.both-button {
+  background: linear-gradient(135deg, #9b59b6, #8e44ad);
+}
+
+.export-note {
+  margin-top: 15px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 @media (max-width: 768px) {
   .header h1 {
     font-size: 1.8rem;
@@ -286,5 +351,13 @@ body {
 
   .result {
     padding: 20px;
+  }
+
+  .export-buttons {
+    flex-direction: column;
+  }
+
+  .export-button {
+    width: 100%;
   }
 }

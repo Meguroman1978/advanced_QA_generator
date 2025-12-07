@@ -17,43 +17,185 @@ app.use(express.json());
 const distPath = path.join(process.cwd(), 'dist');
 // HTTPリクエストを実行してHTMLを取得（通常のブラウザとして振る舞う）
 async function fetchWebsite(url) {
-    try {
-        const response = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-                'Cache-Control': 'max-age=0'
-            },
-            timeout: 15000,
-            maxRedirects: 5,
-            validateStatus: (status) => status < 500 // 500未満のステータスコードを受け入れる
-        });
-        return response.data;
+    console.log(`🌐 Fetching website: ${url}`);
+    // リトライ設定
+    const maxRetries = 3;
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`📡 Attempt ${attempt}/${maxRetries} to fetch ${url}`);
+            const response = await axios.get(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                    'Cache-Control': 'max-age=0'
+                },
+                timeout: 30000, // 30秒に延長
+                maxRedirects: 5,
+                validateStatus: (status) => status < 500 // 500未満のステータスコードを受け入れる
+            });
+            console.log(`✅ Successfully fetched ${url} (${response.data.length} bytes)`);
+            return response.data;
+        }
+        catch (error) {
+            lastError = error;
+            // エラー詳細をログ
+            if (error.response) {
+                // サーバーからレスポンスが返ってきた場合
+                console.error(`❌ Attempt ${attempt} failed with status ${error.response.status}`);
+                console.error(`   Response headers:`, error.response.headers);
+                console.error(`   Response data:`, error.response.data?.substring(0, 200));
+            }
+            else if (error.request) {
+                // リクエストは送信されたがレスポンスがない場合
+                console.error(`❌ Attempt ${attempt} failed: No response received`);
+                console.error(`   Request details:`, {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    timeout: error.config?.timeout
+                });
+            }
+            else {
+                // リクエスト設定時のエラー
+                console.error(`❌ Attempt ${attempt} failed:`, error.message);
+            }
+            // 最後の試行でなければ待機してリトライ
+            if (attempt < maxRetries) {
+                const waitTime = attempt * 2000; // 2秒、4秒と増加
+                console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+        }
     }
-    catch (error) {
-        throw new Error(`Failed to fetch website: ${error}`);
-    }
+    // すべてのリトライが失敗した場合
+    const errorMessage = lastError?.response
+        ? `Failed to fetch website (Status: ${lastError.response.status})`
+        : lastError?.request
+            ? `Failed to fetch website: No response from server (timeout or network error)`
+            : `Failed to fetch website: ${lastError?.message || 'Unknown error'}`;
+    console.error(`🚫 All ${maxRetries} attempts failed for ${url}`);
+    throw new Error(errorMessage);
 }
-// HTMLからテキストコンテンツを抽出
+// HTMLからテキストコンテンツを抽出（商品情報を優先）
 function extractContent(html) {
     const $ = cheerio.load(html);
-    // スクリプト、スタイル、ナビゲーションなどを削除
-    $('script, style, nav, header, footer').remove();
-    // bodyタグのテキストを取得
-    const content = $('body').text();
-    // 余分な空白を削除して整形
-    return content
-        .replace(/\s+/g, ' ')
-        .trim()
-        .substring(0, 4000); // OpenAI APIの制限を考慮して4000文字に制限
+    console.log('🔍 Extracting content with PRODUCT-FIRST algorithm (top-down priority)...');
+    // 【ステップ1】ノイズとなる要素を徹底的に削除
+    $('script, style, noscript, iframe, svg, link').remove();
+    $('nav, header, footer').remove(); // ナビゲーション、ヘッダー、フッター
+    $('[class*="cookie"], [id*="cookie"]').remove(); // クッキー通知
+    $('[class*="sidebar"], [class*="side-bar"], aside').remove(); // サイドバー
+    $('[class*="menu"], [class*="navigation"], [role="navigation"]').remove(); // メニュー
+    $('[class*="breadcrumb"]').remove(); // パンくずリスト
+    $('[class*="share"], [class*="social"]').remove(); // SNSシェアボタン
+    $('[class*="related"], [class*="recommend"], [class*="suggestion"]').remove(); // 関連商品
+    $('[class*="comment"], [class*="review"], [class*="rating"]').remove(); // レビュー欄
+    $('[class*="banner"], [class*="ad"], [class*="advertisement"]').remove(); // 広告
+    $('[class*="newsletter"], [class*="subscribe"]').remove(); // メルマガ購読
+    $('form').remove(); // フォーム（検索、問い合わせなど）
+    // 【ステップ2】商品情報が含まれるメインコンテナを特定（最も重要）
+    const mainContentSelectors = [
+        // 最優先: 明確な商品コンテナ
+        '.product-detail, .product-details, .productDetail',
+        '.product-info, .productInfo, .product-information',
+        '.item-detail, .itemDetail, .item-details',
+        '.product-content, .productContent',
+        // 次優先: 一般的なメインコンテンツ
+        'main article',
+        'main .content',
+        'main',
+        '[role="main"]',
+        'article.product',
+        'article.item',
+        '.main-content',
+        '#main-content',
+        '#content',
+        'article'
+    ];
+    let mainContainer = null;
+    for (const selector of mainContentSelectors) {
+        mainContainer = $(selector).first();
+        if (mainContainer.length > 0 && mainContainer.text().trim().length > 100) {
+            console.log(`✅ Found main container: ${selector}`);
+            break;
+        }
+    }
+    // メインコンテナが見つからない場合はbodyを使用
+    if (!mainContainer || mainContainer.length === 0) {
+        console.log('⚠️ No main container found, using body');
+        mainContainer = $('body');
+    }
+    // 【ステップ3】メインコンテナ内の商品情報を優先順位で抽出
+    const productInfoSections = [];
+    // 最優先: 商品タイトル・見出し（ページ上部）
+    mainContainer.find('h1, h2, [class*="product-title"], [class*="product-name"], [class*="item-title"]').each((_, elem) => {
+        const text = $(elem).text().trim();
+        if (text && text.length > 5 && text.length < 500) {
+            productInfoSections.push({ text, priority: 1 });
+        }
+    });
+    // 高優先: 商品説明・詳細（ページ中央）
+    mainContainer.find('[class*="description"], [class*="detail"], [class*="feature"], [class*="spec"], [class*="about"]').each((_, elem) => {
+        const text = $(elem).text().trim();
+        if (text && text.length > 50) {
+            productInfoSections.push({ text, priority: 2 });
+        }
+    });
+    // 中優先: 価格・購入情報
+    mainContainer.find('[class*="price"], [class*="cost"], [class*="buy"], [class*="purchase"]').each((_, elem) => {
+        const text = $(elem).text().trim();
+        if (text && text.length > 10 && text.length < 300) {
+            productInfoSections.push({ text, priority: 3 });
+        }
+    });
+    // 低優先: その他の段落（ページ下部）
+    mainContainer.find('p, div, section').each((_, elem) => {
+        const text = $(elem).text().trim();
+        // 長すぎず短すぎない、意味のあるテキストのみ
+        if (text && text.length > 30 && text.length < 1000) {
+            // すでに抽出済みのテキストと重複していないかチェック
+            const isDuplicate = productInfoSections.some(section => section.text.includes(text) || text.includes(section.text));
+            if (!isDuplicate) {
+                productInfoSections.push({ text, priority: 4 });
+            }
+        }
+    });
+    // 【ステップ4】優先順位でソートして結合
+    productInfoSections.sort((a, b) => a.priority - b.priority);
+    let extractedContent = productInfoSections
+        .map(section => section.text)
+        .join(' ');
+    // テキストを整形
+    const cleanedContent = extractedContent
+        .replace(/\s+/g, ' ') // 連続する空白を1つに
+        .replace(/\n+/g, ' ') // 改行を空白に
+        .trim();
+    console.log(`✅ Extracted ${cleanedContent.length} characters (${productInfoSections.length} sections)`);
+    console.log(`📊 Priority distribution: P1=${productInfoSections.filter(s => s.priority === 1).length}, P2=${productInfoSections.filter(s => s.priority === 2).length}, P3=${productInfoSections.filter(s => s.priority === 3).length}, P4=${productInfoSections.filter(s => s.priority === 4).length}`);
+    // 【ステップ5】文字数制限（商品情報を最大限保持）
+    // 上位3500文字を取得（フッター情報を完全除外）
+    let finalContent;
+    if (cleanedContent.length <= 3500) {
+        finalContent = cleanedContent;
+    }
+    else {
+        // ページ上部の商品情報のみを使用（フッターの一般情報は除外）
+        finalContent = cleanedContent.substring(0, 3500);
+        console.log(`📏 Content truncated to top 3500 chars (product-focused)`);
+    }
+    // 内容が少なすぎる場合の警告
+    if (finalContent.length < 100) {
+        console.warn('⚠️ WARNING: Very little content extracted. This might not be a product page.');
+    }
+    return finalContent;
 }
 // OpenAI APIを使用して複数のQ&Aを生成
 async function generateQA(content, maxQA = 5, language = 'ja', productUrl) {
@@ -66,10 +208,10 @@ async function generateQA(content, maxQA = 5, language = 'ja', productUrl) {
     const openai = new OpenAI({
         apiKey: apiKey
     });
-    // コンテンツが少ない場合は想定Q&Aモードを有効化
+    // コンテンツが少ない場合の対応
     const isLowContent = content.length < 500;
     const contentNote = isLowContent
-        ? `\n\n⚠️ 注意: ソーステキストが少ないため、一般的な知識や想定される質問・回答を含めて${maxQA}個のQ&Aを作成してください。\n商品やサービスについて、ユーザーが知りたいと思われる情報（使い方、特徴、利点、価格、比較、トラブルシューティングなど）を含めてください。`
+        ? `\n\n⚠️ 注意: ソーステキストが少ない場合でも、必ずソーステキストの情報のみを使用してください。外部情報や一般知識を追加しないでください。テキストから読み取れる情報を複数の角度から深掘りして${maxQA}個のQ&Aを作成してください。`
         : '';
     const languagePrompts = {
         ja: `あなたは日本語のQ&A作成専門家です。以下のテキストから、日本語で正確に${maxQA}個のQ&Aを作成してください。
@@ -79,30 +221,38 @@ async function generateQA(content, maxQA = 5, language = 'ja', productUrl) {
 2. ✅ 数量: 必ず${maxQA}個の異なるQ&Aを生成すること
 3. ✅ 品質: 各Q&Aは完全にユニークで、異なる角度からの質問であること
 4. ❌ 重複禁止: 同じまたは類似した質問を繰り返さないこと
-5. 💡 情報不足対応: テキストに情報が少ない場合は、一般的な知識や想定Q&Aを追加すること
+5. 🚫 【最重要】このウェブページで販売・紹介されている商品についてのみQ&Aを作成すること
+   - ソーステキストに書かれている情報のみを使用すること
+   - 外部の知識や一般常識を追加しないこと
+   - ソーステキストに記載されていない他の商品について言及しないこと
+   - ページ下部の会社情報・連絡先・フッター情報は無視すること
+   - サイトポリシー、プライバシーポリシー、利用規約などは無視すること
 
-【Q&A作成の視点】
-- 基本情報（概要、定義、特徴）
-- 使い方・手順
-- メリット・デメリット
-- 比較・選び方
-- トラブルシューティング
-- よくある質問
-- 応用・発展的な内容${contentNote}
+【Q&A作成の視点】（すべてソーステキストの商品情報のみから）
+- このページで紹介されている主要な商品・サービスとは何か
+- その商品の具体的な特徴・機能は何か
+- その商品の使い方・利用方法はどうか
+- その商品のメリット・デメリットは何か
+- その商品の価格・仕様・スペックはどうか
+- その商品に関する注意事項・制限事項は何か
+- ソーステキストから読み取れる商品情報を複数の角度から深掘り${contentNote}
 
 【出力フォーマット - 必ず守る】
 Q1: [日本語の質問]
-A1: [日本語の詳細な回答]
+A1: [日本語の詳細な回答 - ソーステキストの情報のみ]
 
 Q2: [日本語の質問]
-A2: [日本語の詳細な回答]
+A2: [日本語の詳細な回答 - ソーステキストの情報のみ]
 
 ...Q${maxQA}まで続ける
 
 【ソーステキスト】
 ${content}
 
-【最重要】必ず${maxQA}個の異なるQ&Aを日本語で生成してください。情報が不足している場合は、一般的な知識や想定される質問を追加して${maxQA}個を達成してください。`,
+【最重要】
+- 必ず${maxQA}個の異なるQ&Aを日本語で生成してください
+- すべての回答はソーステキストに記載されている情報のみを使用してください
+- ソーステキストに記載されていない商品や情報については一切言及しないでください`,
         en: `You are an expert Q&A creator. Generate EXACTLY ${maxQA} Q&A pairs in ENGLISH from the text below.
 
 【ABSOLUTE RULES】
@@ -110,30 +260,38 @@ ${content}
 2. ✅ QUANTITY: Generate EXACTLY ${maxQA} distinct Q&A pairs
 3. ✅ QUALITY: Each Q&A must be completely unique with different angles
 4. ❌ NO DUPLICATES: Do NOT repeat similar questions
-5. 💡 LOW CONTENT HANDLING: If text lacks info, add common knowledge and anticipated Q&As
+5. 🚫 【CRITICAL】Create Q&A ONLY about the products sold/featured on THIS webpage
+   - Use ONLY information written in the source text
+   - Do NOT add external knowledge or general information
+   - Do NOT mention other products not listed in the source text
+   - IGNORE footer information (company info, contact details)
+   - IGNORE site policies, privacy policy, terms of service
 
-【Q&A PERSPECTIVES】
-- Basic information (overview, definition, features)
-- How to use / procedures
-- Advantages / disadvantages
-- Comparison / selection criteria
-- Troubleshooting
-- Frequently asked questions
-- Advanced topics${contentNote}
+【Q&A PERSPECTIVES】(All from product information in source text only)
+- What is the main product/service featured on this page?
+- What are the specific features/functions of this product?
+- How to use/utilize this product?
+- What are the benefits/drawbacks of this product?
+- What are the prices/specifications of this product?
+- What are the cautions/limitations regarding this product?
+- Deep dive into product information from multiple angles${contentNote}
 
 【OUTPUT FORMAT - MUST FOLLOW】
 Q1: [English question]
-A1: [Detailed English answer]
+A1: [Detailed English answer - source text only]
 
 Q2: [English question]
-A2: [Detailed English answer]
+A2: [Detailed English answer - source text only]
 
 ...continue to Q${maxQA}
 
 【SOURCE TEXT】
 ${content}
 
-【CRITICAL】Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH. If information is limited, add general knowledge and anticipated questions to reach ${maxQA} Q&As.`,
+【CRITICAL】
+- Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH
+- All answers must use ONLY information stated in the source text
+- Do NOT mention any products not listed in the source text`,
         zh: `你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
 
 【绝对规则】
@@ -141,16 +299,21 @@ ${content}
 2. ✅ 数量: 必须生成正好${maxQA}个不同的问答对
 3. ✅ 质量: 每个问答对必须完全独特，从不同角度提问
 4. ❌ 禁止重复: 不要重复相似的问题
-5. 💡 信息不足处理: 如果文本信息少，添加常识和预期的问答
+5. 🚫 【最重要】仅创建关于此网页销售/介绍的产品的问答
+   - 仅使用源文本中写明的信息
+   - 不要添加外部知识或常识
+   - 不要提及源文本中未列出的其他产品
+   - 忽略页脚信息（公司信息、联系方式）
+   - 忽略网站政策、隐私政策、使用条款等
 
-【问答创作视角】
-- 基本信息（概述、定义、特点）
-- 使用方法、步骤
-- 优点、缺点
-- 比较、选择标准
-- 故障排除
-- 常见问题
-- 高级主题${contentNote}
+【问答创作视角】（均来自源文本的产品信息）
+- 此页面介绍的主要产品/服务是什么？
+- 该产品的具体特征/功能是什么？
+- 如何使用/利用该产品？
+- 该产品的优点/缺点是什么？
+- 该产品的价格/规格是什么？
+- 关于该产品的注意事项/限制是什么？
+- 从多个角度深入了解产品信息${contentNote}
 
 【输出格式 - 必须遵守】
 Q1: [中文问题]
@@ -164,7 +327,10 @@ A2: [详细的中文答案]
 【源文本】
 ${content}
 
-【最重要】必须用中文生成正好${maxQA}个不同的问答对。如果信息有限，添加常识和预期问题以达到${maxQA}个问答。`
+【最重要】
+- 必须用中文生成正好${maxQA}个不同的问答对
+- 所有答案必须仅使用源文本中说明的信息
+- 不要提及源文本中未列出的任何产品`
     };
     try {
         const prompt = languagePrompts[language] || languagePrompts['ja'];
@@ -193,7 +359,7 @@ ${content}
             messages: [
                 {
                     role: 'system',
-                    content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct. IMPORTANT: Generate ALL ${maxQA} pairs, do not stop early.`
+                    content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct. CRITICAL RULES: 1) Create Q&A ONLY about the main product/service featured on the webpage. 2) Use ONLY information from the provided source text. 3) Do NOT add external knowledge. 4) Do NOT mention products not in the source text. 5) IGNORE footer/policy/company info. Focus ONLY on product-specific information. IMPORTANT: Generate ALL ${maxQA} pairs, do not stop early.`
                 },
                 {
                     role: 'user',
@@ -492,10 +658,32 @@ app.post('/api/workflow', async (req, res) => {
         res.json(responseData);
     }
     catch (error) {
-        console.error('Workflow error:', error);
+        console.error('❌ Workflow error:', error);
+        // 詳細なエラー情報を取得
+        let errorMessage = 'Unknown error occurred';
+        let errorDetails = '';
+        if (error instanceof Error) {
+            errorMessage = error.message;
+            errorDetails = error.stack || '';
+        }
+        // Axiosエラーの場合はさらに詳細を追加
+        if (error.response) {
+            errorMessage = `HTTP Error ${error.response.status}: ${error.response.statusText}`;
+            errorDetails = `Response data: ${JSON.stringify(error.response.data).substring(0, 200)}`;
+            console.error('  Response status:', error.response.status);
+            console.error('  Response headers:', error.response.headers);
+        }
+        else if (error.request) {
+            errorMessage = 'No response from server (timeout or network error)';
+            errorDetails = 'The request was sent but no response was received. This could be due to timeout, network issues, or the server being down.';
+            console.error('  Request was sent but no response received');
+        }
+        console.error('  Error message:', errorMessage);
+        console.error('  Error details:', errorDetails);
         res.status(500).json({
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error occurred'
+            error: errorMessage,
+            details: errorDetails
         });
     }
 });
@@ -503,20 +691,25 @@ app.post('/api/workflow', async (req, res) => {
 app.post('/api/export/single', async (req, res) => {
     try {
         const { qaItems, format } = req.body;
-        console.log(`Export request: format=${format}, items=${qaItems?.length}`);
+        console.log(`📥 Export request received: format=${format}, items=${qaItems?.length}`);
+        console.log(`📋 Request headers:`, req.headers['content-type']);
         if (!qaItems || !Array.isArray(qaItems) || qaItems.length === 0) {
+            console.error('❌ Invalid request: qaItems is missing or empty');
             return res.status(400).json({ error: 'Q&A items are required' });
         }
         if (format === 'pdf') {
-            console.log('Starting PDF generation...');
+            console.log('📕 Starting PDF generation...');
             // PDFKitを使用してPDFを生成（同期的に）
-            // 複数のパスを試行
+            // 複数のパスを試行（Docker環境を考慮）
             const fontPaths = [
-                '/home/user/webapp/fonts/NotoSansJP-Regular.ttf',
-                path.join(process.cwd(), 'fonts', 'NotoSansJP-Regular.ttf'),
-                path.join(__dirname, 'fonts', 'NotoSansJP-Regular.ttf')
+                '/app/fonts/NotoSansJP-Regular.ttf', // Docker: /app/fonts/
+                path.join(process.cwd(), 'fonts', 'NotoSansJP-Regular.ttf'), // process.cwd()/fonts/
+                path.join(__dirname, 'fonts', 'NotoSansJP-Regular.ttf'), // __dirname/fonts/
+                '/home/user/webapp/fonts/NotoSansJP-Regular.ttf' // ローカル開発環境
             ];
-            console.log('Trying font paths:', fontPaths);
+            console.log('🔍 Trying font paths:', fontPaths);
+            console.log('📂 Current working directory:', process.cwd());
+            console.log('📂 __dirname:', __dirname);
             let fontPath = '';
             for (const p of fontPaths) {
                 if (fs.existsSync(p)) {
@@ -526,8 +719,9 @@ app.post('/api/export/single', async (req, res) => {
                 }
             }
             if (!fontPath) {
-                console.error('Font not found in any of these paths:', fontPaths);
-                return res.status(500).json({ error: 'Font file not found' });
+                console.warn('⚠️ Font not found in any of these paths:', fontPaths);
+                console.warn('⚠️ Will generate PDF with default font (Japanese text may not display correctly)');
+                // フォントが見つからなくてもPDFは生成する
             }
             const doc = new PDFDocument({ margin: 50 });
             const chunks = [];
@@ -535,32 +729,39 @@ app.post('/api/export/single', async (req, res) => {
             doc.on('data', (chunk) => chunks.push(chunk));
             doc.on('end', () => {
                 const pdfBuffer = Buffer.concat(chunks);
-                console.log(`PDF generated: ${pdfBuffer.length} bytes`);
+                console.log(`✅ PDF generated successfully: ${pdfBuffer.length} bytes`);
                 res.setHeader('Content-Type', 'application/pdf');
                 res.setHeader('Content-Disposition', 'attachment; filename="qa-collection.pdf"');
+                res.setHeader('Content-Length', pdfBuffer.length.toString());
+                console.log(`✅ Sending PDF to client...`);
                 res.send(pdfBuffer);
             });
             // エラーハンドラ
             doc.on('error', (err) => {
-                console.error('PDF generation error:', err);
+                console.error('❌ PDF generation error:', err);
+                console.error('❌ Error stack:', err.stack);
                 if (!res.headersSent) {
-                    res.status(500).json({ error: 'PDF generation failed' });
+                    res.status(500).json({ error: 'PDF generation failed', details: err.message });
                 }
             });
             try {
                 // フォント登録
-                console.log(`📝 Attempting to register font: ${fontPath}`);
                 let fontRegistered = false;
-                try {
-                    doc.registerFont('NotoSans', fontPath);
-                    doc.font('NotoSans');
-                    fontRegistered = true;
-                    console.log('✅ Font registered successfully');
+                if (fontPath) {
+                    console.log(`📝 Attempting to register font: ${fontPath}`);
+                    try {
+                        doc.registerFont('NotoSans', fontPath);
+                        doc.font('NotoSans');
+                        fontRegistered = true;
+                        console.log('✅ Font registered successfully: NotoSans');
+                    }
+                    catch (fontErr) {
+                        console.warn('⚠️ Font registration failed:', fontErr);
+                        doc.font('Helvetica');
+                    }
                 }
-                catch (fontErr) {
-                    console.warn('⚠️ Font registration failed, using default font:', fontErr);
-                    console.warn('   PDF will be generated without Japanese font support');
-                    // デフォルトフォントを使用（英数字のみ）
+                else {
+                    console.warn('⚠️ No font path found, using default font');
                     doc.font('Helvetica');
                 }
                 // タイトル
@@ -606,13 +807,17 @@ app.post('/api/export/single', async (req, res) => {
         }
         else if (format === 'text') {
             // テキストとして返す
+            console.log('📄 Starting TXT generation...');
             let textContent = 'Q&A Collection\n\n';
             qaItems.forEach((item, index) => {
                 textContent += `Q${index + 1}: ${item.question}\n`;
                 textContent += `A${index + 1}: ${item.answer}\n\n`;
             });
-            res.setHeader('Content-Type', 'text/plain');
+            console.log(`✅ TXT generated: ${textContent.length} characters`);
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
             res.setHeader('Content-Disposition', 'attachment; filename="qa-collection.txt"');
+            res.setHeader('Content-Length', Buffer.byteLength(textContent, 'utf8').toString());
+            console.log(`✅ Sending TXT to client...`);
             res.send(textContent);
         }
         else {

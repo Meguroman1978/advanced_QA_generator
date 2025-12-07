@@ -5,6 +5,14 @@ interface WorkflowResult {
   url: string;
   extractedContent: string;
   qaResult: string;
+  qaItems?: Array<{
+    id: string;
+    question: string;
+    answer: string;
+    needsVideo?: boolean;
+    videoReason?: string;
+    videoExamples?: string[];
+  }>;
 }
 
 function App() {
@@ -12,6 +20,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<WorkflowResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // API URLを環境に応じて設定
   // VITE_API_URLが設定されている場合はそれを使用
@@ -67,6 +76,67 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExport = async (format: 'pdf' | 'text') => {
+    if (!result?.qaItems || result.qaItems.length === 0) {
+      setError('エクスポートするQ&Aがありません');
+      return;
+    }
+
+    setExporting(true);
+    setError(null);
+
+    try {
+      console.log(`📥 Exporting as ${format}...`);
+      const response = await fetch(`${API_URL}/api/export/single`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          qaItems: result.qaItems,
+          format: format
+        }),
+      });
+
+      console.log('Export response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Export error response:', errorText);
+        throw new Error(`Export failed: ${response.status} - ${errorText}`);
+      }
+
+      // レスポンスをBlobとして取得
+      const blob = await response.blob();
+      console.log(`✅ Received ${format} blob: ${blob.size} bytes`);
+
+      // ダウンロードリンクを作成してクリック
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = format === 'pdf' ? 'qa-collection.pdf' : 'qa-collection.txt';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      console.log(`✅ ${format.toUpperCase()} download triggered successfully`);
+    } catch (err) {
+      console.error('Export error:', err);
+      setError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportBoth = async () => {
+    await handleExport('pdf');
+    // PDFダウンロード後に少し待機してからTXTをダウンロード
+    setTimeout(async () => {
+      await handleExport('text');
+    }, 500);
   };
 
   return (
@@ -149,6 +219,43 @@ function App() {
               <h3>❓ 生成されたQ&A</h3>
               <div className="qa-box">
                 {result.qaResult}
+              </div>
+            </div>
+
+            <div className="result-section">
+              <h3>💾 ダウンロード</h3>
+              <div className="export-options">
+                <p className="export-description">Q&Aをダウンロードできます（日本語対応）</p>
+                
+                <div className="export-buttons">
+                  <button
+                    onClick={() => handleExport('pdf')}
+                    disabled={exporting}
+                    className="export-button pdf-button"
+                  >
+                    {exporting ? '⏳ 処理中...' : '📕 PDFでダウンロード'}
+                  </button>
+                  
+                  <button
+                    onClick={() => handleExport('text')}
+                    disabled={exporting}
+                    className="export-button text-button"
+                  >
+                    {exporting ? '⏳ 処理中...' : '📄 TXTでダウンロード'}
+                  </button>
+                  
+                  <button
+                    onClick={handleExportBoth}
+                    disabled={exporting}
+                    className="export-button both-button"
+                  >
+                    {exporting ? '⏳ 処理中...' : '📦 両方ダウンロード'}
+                  </button>
+                </div>
+
+                <p className="export-note">
+                  ※ PDFとTXTは日本語フォント（Noto Sans JP）を使用しています
+                </p>
               </div>
             </div>
           </div>
