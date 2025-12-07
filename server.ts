@@ -113,21 +113,137 @@ async function fetchWebsite(url: string): Promise<string> {
   throw new Error(errorMessage);
 }
 
-// HTMLからテキストコンテンツを抽出
+// HTMLからテキストコンテンツを抽出（商品情報を優先）
 function extractContent(html: string): string {
   const $ = cheerio.load(html);
   
-  // スクリプト、スタイル、ナビゲーションなどを削除
-  $('script, style, nav, header, footer').remove();
+  console.log('🔍 Extracting content with PRODUCT-FIRST algorithm (top-down priority)...');
   
-  // bodyタグのテキストを取得
-  const content = $('body').text();
+  // 【ステップ1】ノイズとなる要素を徹底的に削除
+  $('script, style, noscript, iframe, svg, link').remove();
+  $('nav, header, footer').remove(); // ナビゲーション、ヘッダー、フッター
+  $('[class*="cookie"], [id*="cookie"]').remove(); // クッキー通知
+  $('[class*="sidebar"], [class*="side-bar"], aside').remove(); // サイドバー
+  $('[class*="menu"], [class*="navigation"], [role="navigation"]').remove(); // メニュー
+  $('[class*="breadcrumb"]').remove(); // パンくずリスト
+  $('[class*="share"], [class*="social"]').remove(); // SNSシェアボタン
+  $('[class*="related"], [class*="recommend"], [class*="suggestion"]').remove(); // 関連商品
+  $('[class*="comment"], [class*="review"], [class*="rating"]').remove(); // レビュー欄
+  $('[class*="banner"], [class*="ad"], [class*="advertisement"]').remove(); // 広告
+  $('[class*="newsletter"], [class*="subscribe"]').remove(); // メルマガ購読
+  $('form').remove(); // フォーム（検索、問い合わせなど）
   
-  // 余分な空白を削除して整形
-  return content
-    .replace(/\s+/g, ' ')
-    .trim()
-    .substring(0, 4000); // OpenAI APIの制限を考慮して4000文字に制限
+  // 【ステップ2】商品情報が含まれるメインコンテナを特定（最も重要）
+  const mainContentSelectors = [
+    // 最優先: 明確な商品コンテナ
+    '.product-detail, .product-details, .productDetail',
+    '.product-info, .productInfo, .product-information',
+    '.item-detail, .itemDetail, .item-details',
+    '.product-content, .productContent',
+    
+    // 次優先: 一般的なメインコンテンツ
+    'main article',
+    'main .content',
+    'main',
+    '[role="main"]',
+    'article.product',
+    'article.item',
+    '.main-content',
+    '#main-content',
+    '#content',
+    'article'
+  ];
+  
+  let mainContainer = null;
+  for (const selector of mainContentSelectors) {
+    mainContainer = $(selector).first();
+    if (mainContainer.length > 0 && mainContainer.text().trim().length > 100) {
+      console.log(`✅ Found main container: ${selector}`);
+      break;
+    }
+  }
+  
+  // メインコンテナが見つからない場合はbodyを使用
+  if (!mainContainer || mainContainer.length === 0) {
+    console.log('⚠️ No main container found, using body');
+    mainContainer = $('body');
+  }
+  
+  // 【ステップ3】メインコンテナ内の商品情報を優先順位で抽出
+  const productInfoSections: Array<{text: string, priority: number}> = [];
+  
+  // 最優先: 商品タイトル・見出し（ページ上部）
+  mainContainer.find('h1, h2, [class*="product-title"], [class*="product-name"], [class*="item-title"]').each((_, elem) => {
+    const text = $(elem).text().trim();
+    if (text && text.length > 5 && text.length < 500) {
+      productInfoSections.push({ text, priority: 1 });
+    }
+  });
+  
+  // 高優先: 商品説明・詳細（ページ中央）
+  mainContainer.find('[class*="description"], [class*="detail"], [class*="feature"], [class*="spec"], [class*="about"]').each((_, elem) => {
+    const text = $(elem).text().trim();
+    if (text && text.length > 50) {
+      productInfoSections.push({ text, priority: 2 });
+    }
+  });
+  
+  // 中優先: 価格・購入情報
+  mainContainer.find('[class*="price"], [class*="cost"], [class*="buy"], [class*="purchase"]').each((_, elem) => {
+    const text = $(elem).text().trim();
+    if (text && text.length > 10 && text.length < 300) {
+      productInfoSections.push({ text, priority: 3 });
+    }
+  });
+  
+  // 低優先: その他の段落（ページ下部）
+  mainContainer.find('p, div, section').each((_, elem) => {
+    const text = $(elem).text().trim();
+    // 長すぎず短すぎない、意味のあるテキストのみ
+    if (text && text.length > 30 && text.length < 1000) {
+      // すでに抽出済みのテキストと重複していないかチェック
+      const isDuplicate = productInfoSections.some(section => 
+        section.text.includes(text) || text.includes(section.text)
+      );
+      if (!isDuplicate) {
+        productInfoSections.push({ text, priority: 4 });
+      }
+    }
+  });
+  
+  // 【ステップ4】優先順位でソートして結合
+  productInfoSections.sort((a, b) => a.priority - b.priority);
+  
+  let extractedContent = productInfoSections
+    .map(section => section.text)
+    .join(' ');
+  
+  // テキストを整形
+  const cleanedContent = extractedContent
+    .replace(/\s+/g, ' ') // 連続する空白を1つに
+    .replace(/\n+/g, ' ') // 改行を空白に
+    .trim();
+  
+  console.log(`✅ Extracted ${cleanedContent.length} characters (${productInfoSections.length} sections)`);
+  console.log(`📊 Priority distribution: P1=${productInfoSections.filter(s=>s.priority===1).length}, P2=${productInfoSections.filter(s=>s.priority===2).length}, P3=${productInfoSections.filter(s=>s.priority===3).length}, P4=${productInfoSections.filter(s=>s.priority===4).length}`);
+  
+  // 【ステップ5】文字数制限（商品情報を最大限保持）
+  // 上位3500文字を取得（フッター情報を完全除外）
+  let finalContent: string;
+  if (cleanedContent.length <= 3500) {
+    finalContent = cleanedContent;
+  } else {
+    // ページ上部の商品情報のみを使用（フッターの一般情報は除外）
+    finalContent = cleanedContent.substring(0, 3500);
+    console.log(`📏 Content truncated to top 3500 chars (product-focused)`);
+  }
+  
+  // 内容が少なすぎる場合の警告
+  if (finalContent.length < 100) {
+    console.warn('⚠️ WARNING: Very little content extracted. This might not be a product page.');
+  }
+  
+  return finalContent;
 }
 
 // OpenAI APIを使用して複数のQ&Aを生成
@@ -159,18 +275,21 @@ async function generateQA(content: string, maxQA: number = 5, language: string =
 2. ✅ 数量: 必ず${maxQA}個の異なるQ&Aを生成すること
 3. ✅ 品質: 各Q&Aは完全にユニークで、異なる角度からの質問であること
 4. ❌ 重複禁止: 同じまたは類似した質問を繰り返さないこと
-5. 🚫 【最重要】ソーステキストに書かれている情報のみを使用すること
+5. 🚫 【最重要】このウェブページで販売・紹介されている商品についてのみQ&Aを作成すること
+   - ソーステキストに書かれている情報のみを使用すること
    - 外部の知識や一般常識を追加しないこと
-   - ソーステキストに記載されていない商品や情報について言及しないこと
-   - このウェブサイトで紹介・販売されている商品の情報のみ抽出すること
+   - ソーステキストに記載されていない他の商品について言及しないこと
+   - ページ下部の会社情報・連絡先・フッター情報は無視すること
+   - サイトポリシー、プライバシーポリシー、利用規約などは無視すること
 
-【Q&A作成の視点】（すべてソーステキストの情報のみから）
-- このサイトで紹介されている商品・サービスの基本情報
-- このサイトに記載されている使い方・手順
-- このサイトに記載されているメリット・特徴
-- このサイトに記載されている価格・仕様
-- このサイトに記載されている注意事項
-- ソーステキストから読み取れる情報を複数の角度から深掘り${contentNote}
+【Q&A作成の視点】（すべてソーステキストの商品情報のみから）
+- このページで紹介されている主要な商品・サービスとは何か
+- その商品の具体的な特徴・機能は何か
+- その商品の使い方・利用方法はどうか
+- その商品のメリット・デメリットは何か
+- その商品の価格・仕様・スペックはどうか
+- その商品に関する注意事項・制限事項は何か
+- ソーステキストから読み取れる商品情報を複数の角度から深掘り${contentNote}
 
 【出力フォーマット - 必ず守る】
 Q1: [日本語の質問]
@@ -195,18 +314,21 @@ ${content}
 2. ✅ QUANTITY: Generate EXACTLY ${maxQA} distinct Q&A pairs
 3. ✅ QUALITY: Each Q&A must be completely unique with different angles
 4. ❌ NO DUPLICATES: Do NOT repeat similar questions
-5. 🚫 【CRITICAL】Use ONLY information from the source text
+5. 🚫 【CRITICAL】Create Q&A ONLY about the products sold/featured on THIS webpage
+   - Use ONLY information written in the source text
    - Do NOT add external knowledge or general information
-   - Do NOT mention products not listed in the source text
-   - Extract information ONLY about products/services on THIS website
+   - Do NOT mention other products not listed in the source text
+   - IGNORE footer information (company info, contact details)
+   - IGNORE site policies, privacy policy, terms of service
 
-【Q&A PERSPECTIVES】(All from source text only)
-- Products/services introduced on this site
-- Usage/procedures mentioned in this text
-- Benefits/features stated in this text
-- Prices/specifications listed in this text
-- Notes/warnings from this text
-- Deep dive into source text from multiple angles${contentNote}
+【Q&A PERSPECTIVES】(All from product information in source text only)
+- What is the main product/service featured on this page?
+- What are the specific features/functions of this product?
+- How to use/utilize this product?
+- What are the benefits/drawbacks of this product?
+- What are the prices/specifications of this product?
+- What are the cautions/limitations regarding this product?
+- Deep dive into product information from multiple angles${contentNote}
 
 【OUTPUT FORMAT - MUST FOLLOW】
 Q1: [English question]
@@ -220,7 +342,10 @@ A2: [Detailed English answer - source text only]
 【SOURCE TEXT】
 ${content}
 
-【CRITICAL】Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH. If information is limited, add general knowledge and anticipated questions to reach ${maxQA} Q&As.`,
+【CRITICAL】
+- Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH
+- All answers must use ONLY information stated in the source text
+- Do NOT mention any products not listed in the source text`,
     zh: `你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
 
 【绝对规则】
@@ -228,16 +353,21 @@ ${content}
 2. ✅ 数量: 必须生成正好${maxQA}个不同的问答对
 3. ✅ 质量: 每个问答对必须完全独特，从不同角度提问
 4. ❌ 禁止重复: 不要重复相似的问题
-5. 💡 信息不足处理: 如果文本信息少，添加常识和预期的问答
+5. 🚫 【最重要】仅创建关于此网页销售/介绍的产品的问答
+   - 仅使用源文本中写明的信息
+   - 不要添加外部知识或常识
+   - 不要提及源文本中未列出的其他产品
+   - 忽略页脚信息（公司信息、联系方式）
+   - 忽略网站政策、隐私政策、使用条款等
 
-【问答创作视角】
-- 基本信息（概述、定义、特点）
-- 使用方法、步骤
-- 优点、缺点
-- 比较、选择标准
-- 故障排除
-- 常见问题
-- 高级主题${contentNote}
+【问答创作视角】（均来自源文本的产品信息）
+- 此页面介绍的主要产品/服务是什么？
+- 该产品的具体特征/功能是什么？
+- 如何使用/利用该产品？
+- 该产品的优点/缺点是什么？
+- 该产品的价格/规格是什么？
+- 关于该产品的注意事项/限制是什么？
+- 从多个角度深入了解产品信息${contentNote}
 
 【输出格式 - 必须遵守】
 Q1: [中文问题]
@@ -251,7 +381,10 @@ A2: [详细的中文答案]
 【源文本】
 ${content}
 
-【最重要】必须用中文生成正好${maxQA}个不同的问答对。如果信息有限，添加常识和预期问题以达到${maxQA}个问答。`
+【最重要】
+- 必须用中文生成正好${maxQA}个不同的问答对
+- 所有答案必须仅使用源文本中说明的信息
+- 不要提及源文本中未列出的任何产品`
   };
 
   try {
@@ -288,7 +421,7 @@ ${content}
       messages: [
         {
           role: 'system',
-          content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct. CRITICAL RULE: Use ONLY information from the provided source text. Do NOT add external knowledge or mention products not in the source text. IMPORTANT: Generate ALL ${maxQA} pairs, do not stop early.`
+          content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct. CRITICAL RULES: 1) Create Q&A ONLY about the main product/service featured on the webpage. 2) Use ONLY information from the provided source text. 3) Do NOT add external knowledge. 4) Do NOT mention products not in the source text. 5) IGNORE footer/policy/company info. Focus ONLY on product-specific information. IMPORTANT: Generate ALL ${maxQA} pairs, do not stop early.`
         },
         {
           role: 'user',
