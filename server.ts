@@ -35,6 +35,7 @@ interface WorkflowResponse {
   };
   robotsAllowed?: boolean;
   error?: string;
+  details?: string;  // エラー詳細情報用
 }
 
 // HTTPリクエストを実行してHTMLを取得（通常のブラウザとして振る舞う）
