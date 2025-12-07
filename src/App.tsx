@@ -64,12 +64,16 @@ function App() {
 
       const data = await response.json();
       console.log('Response data:', data);
+      console.log('Response data.data:', data.data);
+      console.log('Response data.data.qaItems:', data.data?.qaItems);
+      console.log('qaItems length:', data.data?.qaItems?.length);
 
       if (!data.success) {
         throw new Error(data.error || 'Failed to process workflow');
       }
 
       setResult(data.data);
+      console.log('Result set with qaItems:', data.data?.qaItems?.length, 'items');
     } catch (err) {
       console.error('Request error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
@@ -79,8 +83,15 @@ function App() {
   };
 
   const handleExport = async (format: 'pdf' | 'text') => {
+    console.log('handleExport called with format:', format);
+    console.log('result:', result);
+    console.log('result.qaItems:', result?.qaItems);
+    console.log('result.qaItems.length:', result?.qaItems?.length);
+    
     if (!result?.qaItems || result.qaItems.length === 0) {
-      setError('エクスポートするQ&Aがありません');
+      const errorMsg = 'エクスポートするQ&Aがありません';
+      console.error(errorMsg);
+      setError(errorMsg);
       return;
     }
 
@@ -89,6 +100,7 @@ function App() {
 
     try {
       console.log(`📥 Exporting as ${format}...`);
+      console.log(`📤 Sending ${result.qaItems.length} qaItems to server`);
       const response = await fetch(`${API_URL}/api/export/single`, {
         method: 'POST',
         headers: {
@@ -124,8 +136,12 @@ function App() {
 
       console.log(`✅ ${format.toUpperCase()} download triggered successfully`);
     } catch (err) {
-      console.error('Export error:', err);
-      setError(err instanceof Error ? err.message : 'Export failed');
+      console.error('❌ Export error:', err);
+      console.error('Error type:', typeof err);
+      console.error('Error details:', err);
+      const errorMessage = err instanceof Error ? err.message : `${format.toUpperCase()} エクスポートに失敗しました`;
+      console.error('Setting error message:', errorMessage);
+      setError(errorMessage);
     } finally {
       setExporting(false);
     }
@@ -225,37 +241,50 @@ function App() {
             <div className="result-section">
               <h3>💾 ダウンロード</h3>
               <div className="export-options">
-                <p className="export-description">Q&Aをダウンロードできます（日本語対応）</p>
-                
-                <div className="export-buttons">
-                  <button
-                    onClick={() => handleExport('pdf')}
-                    disabled={exporting}
-                    className="export-button pdf-button"
-                  >
-                    {exporting ? '⏳ 処理中...' : '📕 PDFでダウンロード'}
-                  </button>
-                  
-                  <button
-                    onClick={() => handleExport('text')}
-                    disabled={exporting}
-                    className="export-button text-button"
-                  >
-                    {exporting ? '⏳ 処理中...' : '📄 TXTでダウンロード'}
-                  </button>
-                  
-                  <button
-                    onClick={handleExportBoth}
-                    disabled={exporting}
-                    className="export-button both-button"
-                  >
-                    {exporting ? '⏳ 処理中...' : '📦 両方ダウンロード'}
-                  </button>
-                </div>
-
-                <p className="export-note">
-                  ※ PDFとTXTは日本語フォント（Noto Sans JP）を使用しています
+                <p className="export-description">
+                  Q&Aをダウンロードできます（日本語対応）
+                  {result.qaItems && ` - ${result.qaItems.length}件のQ&A`}
                 </p>
+                
+                {!result.qaItems || result.qaItems.length === 0 ? (
+                  <div className="export-warning">
+                    <p style={{color: 'red'}}>
+                      ⚠️ ダウンロード可能なQ&Aがありません。Q&A生成を再実行してください。
+                    </p>
+                  </div>
+                ) : (
+                <>
+                  <div className="export-buttons">
+                    <button
+                      onClick={() => handleExport('pdf')}
+                      disabled={exporting}
+                      className="export-button pdf-button"
+                    >
+                      {exporting ? '⏳ 処理中...' : '📕 PDFでダウンロード'}
+                    </button>
+                    
+                    <button
+                      onClick={() => handleExport('text')}
+                      disabled={exporting}
+                      className="export-button text-button"
+                    >
+                      {exporting ? '⏳ 処理中...' : '📄 TXTでダウンロード'}
+                    </button>
+                    
+                    <button
+                      onClick={handleExportBoth}
+                      disabled={exporting}
+                      className="export-button both-button"
+                    >
+                      {exporting ? '⏳ 処理中...' : '📦 両方ダウンロード'}
+                    </button>
+                  </div>
+
+                  <p className="export-note">
+                    ※ PDFとTXTは日本語フォント（Noto Sans JP）を使用しています
+                  </p>
+                </>
+                )}
               </div>
             </div>
           </div>
