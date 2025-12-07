@@ -699,6 +699,7 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
         answer: qa.answer,
         source: 'collected' as const,
         sourceType: 'text' as const,
+        url: url, // 元のURLを追加
         timestamp: Date.now(),
         needsVideo: needsVideo
       };
@@ -893,19 +894,42 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
           doc.fontSize(14).fillColor('blue').text(`Q${index + 1}: ${item.question}`);
           doc.moveDown(0.5);
           doc.fontSize(12).fillColor('black').text(`A: ${item.answer}`);
-          doc.moveDown(1.5);
           
-          // 動画推奨情報（includeVideoInfoがtrueの場合のみ出力）
-          if (includeVideoInfo && item.needsVideo) {
-            doc.fontSize(10).fillColor('red').text('🎥 推奨動画作成例');
-            if (item.videoReason) {
-              doc.fontSize(9).fillColor('gray').text(`理由: ${item.videoReason}`);
+          // ラベル情報（includeVideoInfoがtrueの場合のみ出力）
+          if (includeVideoInfo) {
+            doc.moveDown(0.5);
+            doc.fontSize(9).fillColor('gray').text('─────────────────');
+            
+            // ソース情報
+            if (item.source) {
+              doc.fontSize(9).fillColor('gray').text(`📌 ソース: ${item.source}`);
             }
-            if (item.videoExamples && item.videoExamples.length > 0) {
-              doc.fontSize(9).fillColor('gray').text(`例: ${item.videoExamples.join(', ')}`);
+            
+            // 情報源タイプ
+            if (item.sourceType) {
+              doc.fontSize(9).fillColor('gray').text(`📂 情報源タイプ: ${item.sourceType}`);
             }
-            doc.moveDown(1);
+            
+            // URL（もし存在すれば）
+            if (item.url) {
+              doc.fontSize(9).fillColor('gray').text(`🔗 URL: ${item.url}`);
+            }
+            
+            // 動画推奨情報
+            if (item.needsVideo) {
+              doc.fontSize(9).fillColor('red').text('🎥 推奨動画作成例');
+              if (item.videoReason) {
+                doc.fontSize(9).fillColor('gray').text(`  理由: ${item.videoReason}`);
+              }
+              if (item.videoExamples && item.videoExamples.length > 0) {
+                doc.fontSize(9).fillColor('gray').text(`  例: ${item.videoExamples.join(', ')}`);
+              }
+            }
+            
+            doc.fontSize(9).fillColor('gray').text('─────────────────');
           }
+          
+          doc.moveDown(1.5);
         });
         
         // PDF終了
@@ -930,15 +954,37 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
         textContent += `Q${index + 1}: ${item.question}\n`;
         textContent += `A${index + 1}: ${item.answer}\n`;
         
-        // 動画推奨情報（includeVideoInfoがtrueの場合のみ出力）
-        if (includeVideoInfo && item.needsVideo) {
-          textContent += `\n🎥 推奨動画作成例\n`;
-          if (item.videoReason) {
-            textContent += `理由: ${item.videoReason}\n`;
+        // ラベル情報（includeVideoInfoがtrueの場合のみ出力）
+        if (includeVideoInfo) {
+          textContent += '\n─────────────────\n';
+          
+          // ソース情報
+          if (item.source) {
+            textContent += `📌 ソース: ${item.source}\n`;
           }
-          if (item.videoExamples && item.videoExamples.length > 0) {
-            textContent += `例: ${item.videoExamples.join(', ')}\n`;
+          
+          // 情報源タイプ
+          if (item.sourceType) {
+            textContent += `📂 情報源タイプ: ${item.sourceType}\n`;
           }
+          
+          // URL（もし存在すれば）
+          if (item.url) {
+            textContent += `🔗 URL: ${item.url}\n`;
+          }
+          
+          // 動画推奨情報
+          if (item.needsVideo) {
+            textContent += `🎥 推奨動画作成例\n`;
+            if (item.videoReason) {
+              textContent += `  理由: ${item.videoReason}\n`;
+            }
+            if (item.videoExamples && item.videoExamples.length > 0) {
+              textContent += `  例: ${item.videoExamples.join(', ')}\n`;
+            }
+          }
+          
+          textContent += '─────────────────\n';
         }
         
         textContent += '\n';

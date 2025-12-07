@@ -265,7 +265,7 @@ function App() {
                         onChange={(e) => setIncludeVideoInfo(e.target.checked)}
                       />
                       <span className="checkbox-label">
-                        推奨動画作成例を含める（動画制作時の参考情報）
+                        出力するPDF/Word/Textファイルにラベル（ソース、情報源タイプ、URL）を含める
                       </span>
                     </label>
                   </div>
