@@ -262,9 +262,36 @@ body {
 }
 
 .export-description {
-  margin-bottom: 20px;
+  margin-bottom: 15px;
   color: var(--text-secondary);
   font-size: 0.95rem;
+}
+
+.export-options-checkbox {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.export-options-checkbox label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.export-options-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+.checkbox-label {
+  color: var(--text-color);
+  user-select: none;
 }
 
 .export-buttons {

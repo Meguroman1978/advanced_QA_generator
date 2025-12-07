@@ -21,6 +21,7 @@ function App() {
   const [result, setResult] = useState<WorkflowResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [includeVideoInfo, setIncludeVideoInfo] = useState(false);
 
   // API URLを環境に応じて設定
   // VITE_API_URLが設定されている場合はそれを使用
@@ -87,6 +88,7 @@ function App() {
     console.log('result:', result);
     console.log('result.qaItems:', result?.qaItems);
     console.log('result.qaItems.length:', result?.qaItems?.length);
+    console.log('includeVideoInfo:', includeVideoInfo);
     
     if (!result?.qaItems || result.qaItems.length === 0) {
       const errorMsg = 'エクスポートするQ&Aがありません';
@@ -100,7 +102,7 @@ function App() {
 
     try {
       console.log(`📥 Exporting as ${format}...`);
-      console.log(`📤 Sending ${result.qaItems.length} qaItems to server`);
+      console.log(`📤 Sending ${result.qaItems.length} qaItems to server (includeVideoInfo: ${includeVideoInfo})`);
       const response = await fetch(`${API_URL}/api/export/single`, {
         method: 'POST',
         headers: {
@@ -108,7 +110,8 @@ function App() {
         },
         body: JSON.stringify({
           qaItems: result.qaItems,
-          format: format
+          format: format,
+          includeVideoInfo: includeVideoInfo
         }),
       });
 
@@ -254,6 +257,19 @@ function App() {
                   </div>
                 ) : (
                 <>
+                  <div className="export-options-checkbox">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={includeVideoInfo}
+                        onChange={(e) => setIncludeVideoInfo(e.target.checked)}
+                      />
+                      <span className="checkbox-label">
+                        推奨動画作成例を含める（動画制作時の参考情報）
+                      </span>
+                    </label>
+                  </div>
+
                   <div className="export-buttons">
                     <button
                       onClick={() => handleExport('pdf')}

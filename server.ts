@@ -797,9 +797,9 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
 // PDFエクスポートエンドポイント（シンプル版）
 app.post('/api/export/single', async (req: Request, res: Response) => {
   try {
-    const { qaItems, format } = req.body;
+    const { qaItems, format, includeVideoInfo = false } = req.body;
     
-    console.log(`📥 Export request received: format=${format}, items=${qaItems?.length}`);
+    console.log(`📥 Export request received: format=${format}, items=${qaItems?.length}, includeVideoInfo=${includeVideoInfo}`);
     console.log(`📋 Request headers:`, req.headers['content-type']);
     
     if (!qaItems || !Array.isArray(qaItems) || qaItems.length === 0) {
@@ -895,14 +895,14 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
           doc.fontSize(12).fillColor('black').text(`A: ${item.answer}`);
           doc.moveDown(1.5);
           
-          // 動画推奨情報
-          if (item.needsVideo) {
-            doc.fontSize(10).fillColor('red').text('🎥 Video Recommended');
+          // 動画推奨情報（includeVideoInfoがtrueの場合のみ出力）
+          if (includeVideoInfo && item.needsVideo) {
+            doc.fontSize(10).fillColor('red').text('🎥 推奨動画作成例');
             if (item.videoReason) {
-              doc.fontSize(9).fillColor('gray').text(`Reason: ${item.videoReason}`);
+              doc.fontSize(9).fillColor('gray').text(`理由: ${item.videoReason}`);
             }
             if (item.videoExamples && item.videoExamples.length > 0) {
-              doc.fontSize(9).fillColor('gray').text(`Examples: ${item.videoExamples.join(', ')}`);
+              doc.fontSize(9).fillColor('gray').text(`例: ${item.videoExamples.join(', ')}`);
             }
             doc.moveDown(1);
           }
@@ -928,7 +928,20 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
       let textContent = 'Q&A Collection\n\n';
       qaItems.forEach((item: any, index: number) => {
         textContent += `Q${index + 1}: ${item.question}\n`;
-        textContent += `A${index + 1}: ${item.answer}\n\n`;
+        textContent += `A${index + 1}: ${item.answer}\n`;
+        
+        // 動画推奨情報（includeVideoInfoがtrueの場合のみ出力）
+        if (includeVideoInfo && item.needsVideo) {
+          textContent += `\n🎥 推奨動画作成例\n`;
+          if (item.videoReason) {
+            textContent += `理由: ${item.videoReason}\n`;
+          }
+          if (item.videoExamples && item.videoExamples.length > 0) {
+            textContent += `例: ${item.videoExamples.join(', ')}\n`;
+          }
+        }
+        
+        textContent += '\n';
       });
       
       console.log(`✅ TXT generated: ${textContent.length} characters`);
