@@ -5,10 +5,15 @@ import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 // @ts-ignore
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 dotenv.config();
+// ES Moduleで__dirnameを取得
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const app = express();
 const port = parseInt(process.env.PORT || '3001', 10);
 app.use(cors());
