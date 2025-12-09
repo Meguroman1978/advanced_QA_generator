@@ -597,8 +597,14 @@ app.post('/api/workflow', async (req, res) => {
             const combined = (question + ' ' + answer).toLowerCase();
             return videoKeywords.some(keyword => combined.includes(keyword.toLowerCase()));
         };
+        // OpenAI クライアントを初期化（動画推奨用）
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+            throw new Error('OpenAI API key is not configured');
+        }
+        const openai = new OpenAI({ apiKey });
         // qaItemsを生成（動画推奨情報を含む）
-        const qaItems = qaList.map((qa, index) => {
+        const qaItems = await Promise.all(qaList.map(async (qa, index) => {
             const needsVideo = needsVideoExplanation(qa.question, qa.answer);
             console.error(`DEBUG Q${index + 1} needsVideo: ${needsVideo} - Q: ${qa.question.substring(0, 50)}`);
             const item = {
@@ -611,27 +617,99 @@ app.post('/api/workflow', async (req, res) => {
                 timestamp: Date.now(),
                 needsVideo: needsVideo
             };
+            // 動画推奨がある場合、OpenAI APIで具体的な理由と例を生成
             if (needsVideo) {
-                item.videoReason = language === 'ja'
-                    ? 'この内容は視覚的な説明があるとより理解しやすくなります。'
-                    : language === 'zh'
-                        ? '此内容通过视觉说明会更容易理解。'
-                        : 'This content would be easier to understand with visual explanation.';
-                item.videoExamples = [
-                    language === 'ja'
-                        ? '操作方法のデモンストレーション動画'
+                try {
+                    const videoPrompt = language === 'ja'
+                        ? `以下のQ&Aについて、動画で説明すべき理由と具体的な動画例を提案してください。
+
+質問: ${qa.question}
+回答: ${qa.answer}
+
+以下の形式で回答してください：
+理由: [なぜこのQ&Aは動画での説明が効果的か、具体的に1文で]
+例1: [具体的な動画タイトル例1]
+例2: [具体的な動画タイトル例2]
+
+【重要】必ず日本語で、このQ&Aの内容に特化した具体的な提案をしてください。`
                         : language === 'zh'
-                            ? '操作方法演示视频'
-                            : 'Demonstration video of the operation',
-                    language === 'ja'
-                        ? '実際の使用例を示す動画'
+                            ? `对于以下的问答，请提出为什么需要用视频说明的理由，以及具体的视频示例。
+
+问题: ${qa.question}
+回答: ${qa.answer}
+
+请按照以下格式回答：
+理由: [为什么这个问答用视频说明更有效，用一句话具体说明]
+例1: [具体的视频标题示例1]
+例2: [具体的视频标题示例2]
+
+【重要】必须用中文，并且要针对这个问答内容提出具体的建议。`
+                            : `For the following Q&A, suggest why video explanation would be effective and specific video examples.
+
+Question: ${qa.question}
+Answer: ${qa.answer}
+
+Please respond in this format:
+Reason: [Why video explanation is effective for this Q&A, specifically in one sentence]
+Example1: [Specific video title example 1]
+Example2: [Specific video title example 2]
+
+【Important】Must be in English and specific to this Q&A content.`;
+                    const videoResponse = await openai.chat.completions.create({
+                        model: 'gpt-3.5-turbo',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: 'You are a video content planning expert. Provide specific, actionable video suggestions.'
+                            },
+                            {
+                                role: 'user',
+                                content: videoPrompt
+                            }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 300
+                    });
+                    const videoSuggestion = videoResponse.choices[0]?.message?.content || '';
+                    console.log(`[VIDEO] Q${index + 1} suggestion:`, videoSuggestion.substring(0, 100));
+                    // レスポンスをパース
+                    const reasonMatch = videoSuggestion.match(/理由[：:]\s*(.+?)(?=\n|例)/s) ||
+                        videoSuggestion.match(/Reason[：:]\s*(.+?)(?=\n|Example)/s);
+                    const example1Match = videoSuggestion.match(/例1[：:]\s*(.+?)(?=\n|例2|$)/s) ||
+                        videoSuggestion.match(/Example1[：:]\s*(.+?)(?=\n|Example2|$)/s);
+                    const example2Match = videoSuggestion.match(/例2[：:]\s*(.+?)(?=\n|$)/s) ||
+                        videoSuggestion.match(/Example2[：:]\s*(.+?)(?=\n|$)/s);
+                    if (reasonMatch) {
+                        item.videoReason = reasonMatch[1].trim();
+                    }
+                    const examples = [];
+                    if (example1Match)
+                        examples.push(example1Match[1].trim());
+                    if (example2Match)
+                        examples.push(example2Match[1].trim());
+                    if (examples.length > 0) {
+                        item.videoExamples = examples;
+                    }
+                }
+                catch (videoError) {
+                    console.error(`Failed to generate video suggestion for Q${index + 1}:`, videoError);
+                    // フォールバック: 固定の文言を使用
+                    item.videoReason = language === 'ja'
+                        ? 'この内容は視覚的な説明があるとより理解しやすくなります。'
                         : language === 'zh'
-                            ? '实际使用示例视频'
-                            : 'Video showing actual usage examples'
-                ];
+                            ? '此内容通过视觉说明会更容易理解。'
+                            : 'This content would be easier to understand with visual explanation.';
+                    item.videoExamples = [
+                        language === 'ja'
+                            ? '操作方法のデモンストレーション動画'
+                            : language === 'zh'
+                                ? '操作方法演示视频'
+                                : 'Demonstration video of the operation'
+                    ];
+                }
             }
             return item;
-        });
+        }));
         // 全Q&Aを結合した文字列も生成（後方互換性のため）
         const qaResult = qaList.map((qa, i) => `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`).join('\n\n');
         console.log(`🔍 DEBUG - Before response:`);
