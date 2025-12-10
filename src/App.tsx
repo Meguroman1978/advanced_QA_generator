@@ -125,6 +125,17 @@ function App() {
         }
       } else {
         console.log('✅ Q&As generated successfully:', data.data?.qaItems?.length);
+        
+        // 🚨 強制チェック: Q&A数が0なのに診断情報がない場合
+        if (data.data?.qaItems?.length === 0) {
+          console.error('🚨 CRITICAL: Q&A count is 0 but no diagnostics!');
+          console.log('🔍 Response data:', JSON.stringify(data.data, null, 2));
+          
+          // 強制的にエラーメッセージを表示
+          setError(`❌ Q&A生成に失敗しました (0件)\n\n【サーバーレスポンス】\n${JSON.stringify(data.data, null, 2)}\n\n【対策】\n1. サーバーログを確認してください\n2. flyctl logs --app advanced-qa-generator\n3. この情報を報告してください`);
+          setResult(null);
+          return;
+        }
       }
 
       setResult(data.data);
