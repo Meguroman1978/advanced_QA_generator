@@ -16,6 +16,7 @@ chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
 document.getElementById('extractBtn').addEventListener('click', async () => {
   const statusDiv = document.getElementById('status');
   const extractBtn = document.getElementById('extractBtn');
+  const copyBtn = document.getElementById('copyBtn');
   
   try {
     extractBtn.disabled = true;
@@ -52,10 +53,12 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
           <div class="success">
             ✅ HTML抽出成功！<br>
             <small>サイズ: ${(extractedHTML.length / 1024).toFixed(2)} KB</small><br>
-            <small>タイトル: ${data.title}</small>
+            <small>タイトル: ${data.title}</small><br>
+            <small>次: 「HTMLをコピー」をクリック</small>
           </div>
         `;
         extractBtn.disabled = false;
+        copyBtn.style.display = 'block'; // コピーボタンを表示
       });
     } else {
       throw new Error('HTMLの抽出に失敗しました');
@@ -64,6 +67,32 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
     console.error('Error:', error);
     statusDiv.innerHTML = `<div class="error">❌ エラー: ${error.message}</div>`;
     extractBtn.disabled = false;
+  }
+});
+
+// HTMLをコピーボタン
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  const statusDiv = document.getElementById('status');
+  
+  if (!extractedHTML) {
+    statusDiv.innerHTML = '<div class="error">❌ 先にHTMLを抽出してください</div>';
+    return;
+  }
+  
+  try {
+    // クリップボードにコピー
+    await navigator.clipboard.writeText(extractedHTML);
+    
+    statusDiv.innerHTML = `
+      <div class="success">
+        ✅ クリップボードにコピーしました！<br>
+        <small>サイズ: ${(extractedHTML.length / 1024).toFixed(2)} KB</small><br>
+        <small>次: 「Q&A Generator を開く」をクリック</small>
+      </div>
+    `;
+  } catch (error) {
+    console.error('Copy error:', error);
+    statusDiv.innerHTML = `<div class="error">❌ コピーに失敗: ${error.message}</div>`;
   }
 });
 

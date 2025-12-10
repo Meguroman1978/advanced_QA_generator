@@ -41,32 +41,6 @@ function App() {
   };
   const API_URL = getApiUrl();
 
-  // Load HTML from browser extension
-  const loadFromExtension = async () => {
-    try {
-      // @ts-ignore - Chrome extension API
-      if (typeof chrome !== 'undefined' && chrome.storage) {
-        // If running as Chrome extension or with extension API access
-        // @ts-ignore - Chrome extension API
-        chrome.storage.local.get(['extractedHTML', 'extractedURL', 'extractedTitle'], (data: any) => {
-          if (data.extractedHTML) {
-            setUrl(data.extractedURL || '');
-            setSourceCodeInput(data.extractedHTML);
-            setUseSourceCode(true);
-            alert(`✅ HTMLを読み込みました: ${data.extractedTitle || data.extractedURL}`);
-          } else {
-            alert('⚠️ 拡張機能からHTMLが見つかりませんでした。\n先に拡張機能でHTMLを抽出してください。');
-          }
-        });
-      } else {
-        alert('⚠️ この機能はChrome拡張機能が必要です。\n代わりに「ソースコードを挿入」オプションを使用してください。');
-      }
-    } catch (error) {
-      console.error('Error loading from extension:', error);
-      alert('❌ 拡張機能からの読み込みに失敗しました');
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -296,38 +270,33 @@ function App() {
           }}>
             <h3 style={{ marginTop: 0, color: '#2e7d32' }}>🔓 ボット検知を100%回避する方法</h3>
             <p style={{ fontSize: '14px', marginBottom: '10px' }}>
-              ブラウザ拡張機能を使用すると、阪急オンラインショップなどのボット検知サイトでも確実にアクセスできます。
+              <strong>Chrome拡張機能を使用した手順：</strong>
             </p>
+            <ol style={{ fontSize: '13px', marginBottom: '15px', paddingLeft: '20px', lineHeight: '1.8' }}>
+              <li>ターゲットページで拡張機能を開く</li>
+              <li>「このページのHTMLを抽出」をクリック</li>
+              <li><strong>「HTMLをコピー」をクリック</strong></li>
+              <li>「Q&A Generator を開く」をクリック（このページが開く）</li>
+              <li>下の「ソースコード挿入を有効化」をクリック</li>
+              <li>オレンジ色のテキストエリアに<strong>貼り付け（Cmd+V）</strong></li>
+              <li>URLを入力して「Q&Aを生成」をクリック</li>
+            </ol>
             <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-              <button
-                type="button"
-                onClick={loadFromExtension}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#4caf50',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                📄 拡張機能からHTMLを読み込む
-              </button>
               <button
                 type="button"
                 onClick={() => setUseSourceCode(!useSourceCode)}
                 style={{
                   padding: '10px 20px',
-                  backgroundColor: useSourceCode ? '#ff9800' : '#757575',
+                  backgroundColor: useSourceCode ? '#ff9800' : '#4caf50',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
                   cursor: 'pointer',
-                  fontSize: '14px'
+                  fontSize: '14px',
+                  fontWeight: 'bold'
                 }}
               >
-                {useSourceCode ? '✅ ソースコード挿入モード' : '📝 ソースコード挿入を有効化'}
+                {useSourceCode ? '✅ ソースコード挿入モード（有効）' : '📝 ソースコード挿入を有効化'}
               </button>
             </div>
             <details style={{ fontSize: '13px', cursor: 'pointer' }}>
@@ -350,24 +319,37 @@ function App() {
               borderRadius: '8px',
               border: '2px solid #ff9800'
             }}>
-              <label htmlFor="sourceCode" style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-                HTMLソースコード:
+              <label htmlFor="sourceCode" style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: '#e65100' }}>
+                📋 HTMLソースコード（Chrome拡張機能でコピーしたHTMLを貼り付け）:
               </label>
+              <div style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#fff8e1', borderRadius: '4px', fontSize: '13px' }}>
+                <strong>貼り付け方法:</strong> テキストエリア内をクリック → <code>Cmd+V</code> (Mac) または <code>Ctrl+V</code> (Windows)
+              </div>
               <textarea
                 id="sourceCode"
                 value={sourceCodeInput}
                 onChange={(e) => setSourceCodeInput(e.target.value)}
-                placeholder="ここにHTMLソースコードを貼り付けてください..."
+                placeholder="1. Chrome拡張機能で「HTMLをコピー」をクリック
+2. ここをクリック
+3. Cmd+V（Mac）または Ctrl+V（Windows）で貼り付け
+
+HTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコードが表示されます"
                 style={{
                   width: '100%',
-                  minHeight: '200px',
-                  padding: '10px',
+                  minHeight: '250px',
+                  padding: '15px',
                   fontFamily: 'monospace',
                   fontSize: '12px',
                   borderRadius: '4px',
-                  border: '1px solid #ccc'
+                  border: sourceCodeInput ? '2px solid #4caf50' : '2px dashed #ff9800',
+                  backgroundColor: sourceCodeInput ? '#f1f8e9' : '#fff'
                 }}
               />
+              {sourceCodeInput && (
+                <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '4px', fontSize: '13px', color: '#2e7d32' }}>
+                  ✅ HTMLが貼り付けられました（{(sourceCodeInput.length / 1024).toFixed(2)} KB）
+                </div>
+              )}
             </div>
           )}
 
