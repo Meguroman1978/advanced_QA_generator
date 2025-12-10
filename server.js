@@ -24,7 +24,7 @@ const distPath = path.join(process.cwd(), 'dist');
 // Playwrightでブラウザ経由でHTMLを取得（JavaScript実行サイトやセキュリティ保護されたサイトに対応）
 async function fetchWithBrowser(url) {
     console.log(`🎭 Fetching with Playwright (real browser): ${url}`);
-    let browser;
+    let browser = null;
     try {
         // システムChromiumを使用（Dockerコンテナ内）
         const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
@@ -38,39 +38,87 @@ async function fetchWithBrowser(url) {
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--disable-software-rasterizer',
-                '--disable-web-security'
-            ]
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-blink-features=AutomationControlled', // 自動化検出を無効化
+                '--single-process',
+                '--no-zygote'
+            ],
+            timeout: 30000
         });
         const context = await browser.newContext({
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            viewport: { width: 1920, height: 1080 },
+            viewport: { width: 1280, height: 720 },
             extraHTTPHeaders: {
                 'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                'Referer': 'https://www.google.com/'
-            }
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Referer': 'https://www.google.com/',
+                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                'Sec-Ch-Ua-Mobile': '?0',
+                'Sec-Ch-Ua-Platform': '"Windows"',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1',
+                'DNT': '1'
+            },
+            javaScriptEnabled: true
         });
         const page = await context.newPage();
+        // WebDriver検出を回避
+        await page.addInitScript(`
+      // navigator.webdriverを削除
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+      
+      // Chrome自動化フラグを削除
+      window.chrome = {
+        runtime: {},
+      };
+      
+      // Permissionsをオーバーライド
+      const originalQuery = window.navigator.permissions.query;
+      window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+          Promise.resolve({ state: Notification.permission }) :
+          originalQuery(parameters)
+      );
+    `);
         console.log(`⏳ Navigating to ${url}...`);
-        // ページに移動（ネットワークアイドルまで待機）
+        // ページに移動
         await page.goto(url, {
-            waitUntil: 'networkidle',
-            timeout: 60000 // 60秒タイムアウト
+            waitUntil: 'domcontentloaded',
+            timeout: 60000
         });
-        console.log(`⏳ Waiting for page to fully load...`);
+        console.log(`⏳ Waiting for dynamic content (5s)...`);
         // JavaScriptで動的に生成されるコンテンツを待機
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(5000);
+        // 人間らしいスクロール動作
+        console.log(`🖱️ Simulating human scrolling...`);
+        await page.evaluate('window.scrollTo(0, 500)');
+        await page.waitForTimeout(1000);
+        await page.evaluate('window.scrollTo(0, 0)');
+        await page.waitForTimeout(1000);
         // ページのHTMLを取得
         const html = await page.content();
         console.log(`✅ Successfully fetched with Playwright (${html.length} bytes)`);
+        console.log(`📄 HTML preview (first 300 chars): ${html.substring(0, 300)}`);
         await browser.close();
         return html;
     }
     catch (error) {
-        if (browser) {
-            await browser.close();
-        }
         console.error(`❌ Playwright fetch failed:`, error.message);
+        console.error(`   Error stack:`, error.stack);
+        if (browser) {
+            try {
+                await browser.close();
+            }
+            catch (closeError) {
+                console.error(`❌ Error closing browser:`, closeError);
+            }
+        }
         throw error;
     }
 }
@@ -191,6 +239,10 @@ async function fetchWebsite(url) {
 function extractContent(html) {
     const $ = cheerio.load(html);
     console.log('🔍 Extracting content with PRODUCT-FIRST algorithm (top-down priority)...');
+    console.log(`📄 Original HTML length: ${html.length} bytes`);
+    // デバッグ: タイトルを確認
+    const pageTitle = $('title').text();
+    console.log(`📌 Page title: ${pageTitle}`);
     // 【ステップ1】ノイズとなる要素を徹底的に削除
     $('script, style, noscript, iframe, svg, link').remove();
     $('nav, header, footer').remove(); // ナビゲーション、ヘッダー、フッター
@@ -211,6 +263,12 @@ function extractContent(html) {
         '.product-info, .productInfo, .product-information',
         '.item-detail, .itemDetail, .item-details',
         '.product-content, .productContent',
+        // 阪急オンライン特有のセレクタ
+        '.goodsDetail',
+        '.itemBox',
+        '#goodsDetailArea',
+        '.detailBox',
+        '.goodsInfo',
         // 次優先: 一般的なメインコンテンツ
         'main article',
         'main .content',
@@ -221,7 +279,12 @@ function extractContent(html) {
         '.main-content',
         '#main-content',
         '#content',
-        'article'
+        'article',
+        // ECサイト共通セレクタ
+        '[itemscope][itemtype*="Product"]',
+        '.product',
+        '.goods',
+        '.item'
     ];
     let mainContainer = null;
     for (const selector of mainContentSelectors) {
@@ -298,6 +361,8 @@ function extractContent(html) {
     if (finalContent.length < 100) {
         console.warn('⚠️ WARNING: Very little content extracted. This might not be a product page.');
     }
+    // 抽出されたコンテンツのプレビューを表示
+    console.log(`📄 Extracted content preview (first 300 chars): ${finalContent.substring(0, 300)}`);
     return finalContent;
 }
 // OpenAI APIを使用して複数のQ&Aを生成
@@ -1099,9 +1164,13 @@ app.use(express.static(distPath));
 app.get(/^(?!\/api).*$/, (req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
 });
-app.listen(port, '0.0.0.0', () => {
+const server = app.listen(port, '0.0.0.0', () => {
     console.log(`Server is running on http://0.0.0.0:${port}`);
     console.log('Environment:', process.env.NODE_ENV);
     console.log('Dist path:', distPath);
     console.log('API Key configured:', !!process.env.OPENAI_API_KEY);
 });
+// タイムアウト設定を延長（Playwright処理のため）
+server.timeout = 300000; // 5分
+server.keepAliveTimeout = 310000;
+server.headersTimeout = 320000;
