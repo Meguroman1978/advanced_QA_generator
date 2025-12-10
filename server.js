@@ -10,6 +10,7 @@ import { dirname } from 'path';
 // @ts-ignore
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
+import { chromium } from 'playwright-core';
 dotenv.config();
 // ES Moduleで__dirnameを取得
 const __filename = fileURLToPath(import.meta.url);
@@ -20,12 +21,67 @@ app.use(cors());
 app.use(express.json());
 // 静的ファイルのパスを定義（後で使用）
 const distPath = path.join(process.cwd(), 'dist');
+// Playwrightでブラウザ経由でHTMLを取得（JavaScript実行サイトやセキュリティ保護されたサイトに対応）
+async function fetchWithBrowser(url) {
+    console.log(`🎭 Fetching with Playwright (real browser): ${url}`);
+    let browser;
+    try {
+        // システムChromiumを使用（Dockerコンテナ内）
+        const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
+        console.log(`🚀 Launching Chromium from: ${executablePath}`);
+        browser = await chromium.launch({
+            headless: true,
+            executablePath: executablePath,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--disable-web-security'
+            ]
+        });
+        const context = await browser.newContext({
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            viewport: { width: 1920, height: 1080 },
+            extraHTTPHeaders: {
+                'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Referer': 'https://www.google.com/'
+            }
+        });
+        const page = await context.newPage();
+        console.log(`⏳ Navigating to ${url}...`);
+        // ページに移動（ネットワークアイドルまで待機）
+        await page.goto(url, {
+            waitUntil: 'networkidle',
+            timeout: 60000 // 60秒タイムアウト
+        });
+        console.log(`⏳ Waiting for page to fully load...`);
+        // JavaScriptで動的に生成されるコンテンツを待機
+        await page.waitForTimeout(3000);
+        // ページのHTMLを取得
+        const html = await page.content();
+        console.log(`✅ Successfully fetched with Playwright (${html.length} bytes)`);
+        await browser.close();
+        return html;
+    }
+    catch (error) {
+        if (browser) {
+            await browser.close();
+        }
+        console.error(`❌ Playwright fetch failed:`, error.message);
+        throw error;
+    }
+}
 // HTTPリクエストを実行してHTMLを取得（通常のブラウザとして振る舞う）
+// まずaxiosで試行し、403エラーの場合はPuppeteerにフォールバック
 async function fetchWebsite(url) {
     console.log(`🌐 Fetching website: ${url}`);
     // リトライ設定
     const maxRetries = 3;
     let lastError;
+    let usedPuppeteer = false;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             console.log(`📡 Attempt ${attempt}/${maxRetries} to fetch ${url}`);
@@ -41,13 +97,31 @@ async function fetchWebsite(url) {
                     'Sec-Fetch-Mode': 'navigate',
                     'Sec-Fetch-Site': 'none',
                     'Sec-Fetch-User': '?1',
-                    'Cache-Control': 'max-age=0'
+                    'Cache-Control': 'max-age=0',
+                    'Referer': 'https://www.google.com/'
                 },
                 timeout: 30000, // 30秒に延長
                 maxRedirects: 5,
                 validateStatus: (status) => status < 500 // 500未満のステータスコードを受け入れる
             });
             console.log(`✅ Successfully fetched ${url} (${response.data.length} bytes)`);
+            // コンテンツに"403 Forbidden"が含まれている場合、実際はブロックされている
+            const contentStr = String(response.data);
+            if (contentStr.includes('403 Forbidden') || contentStr.includes('Access Denied') ||
+                contentStr.includes('Forbidden') && contentStr.length < 1000) {
+                console.log(`⚠️ Content contains "403 Forbidden" or blocking message. Trying Playwright...`);
+                if (!usedPuppeteer) {
+                    try {
+                        const html = await fetchWithBrowser(url);
+                        return html;
+                    }
+                    catch (browserError) {
+                        console.error(`❌ Playwright failed:`, browserError.message);
+                        usedPuppeteer = true;
+                        // フォールバックして通常レスポンスを返す
+                    }
+                }
+            }
             return response.data;
         }
         catch (error) {
@@ -58,6 +132,19 @@ async function fetchWebsite(url) {
                 console.error(`❌ Attempt ${attempt} failed with status ${error.response.status}`);
                 console.error(`   Response headers:`, error.response.headers);
                 console.error(`   Response data:`, error.response.data?.substring(0, 200));
+                // 403エラー（アクセス拒否）の場合、Playwrightを試行
+                if (error.response.status === 403 && !usedPuppeteer) {
+                    console.log(`🔄 403 Forbidden detected. Switching to Playwright (real browser)...`);
+                    try {
+                        const html = await fetchWithBrowser(url);
+                        return html;
+                    }
+                    catch (browserError) {
+                        console.error(`❌ Playwright also failed:`, browserError.message);
+                        usedPuppeteer = true;
+                        // Playwright失敗後も通常のリトライを続行
+                    }
+                }
             }
             else if (error.request) {
                 // リクエストは送信されたがレスポンスがない場合
@@ -80,13 +167,24 @@ async function fetchWebsite(url) {
             }
         }
     }
-    // すべてのリトライが失敗した場合
+    // すべてのリトライが失敗した場合、最後にPlaywrightを試行
+    if (!usedPuppeteer) {
+        console.log(`🔄 All axios attempts failed. Trying Playwright as last resort...`);
+        try {
+            const html = await fetchWithBrowser(url);
+            return html;
+        }
+        catch (browserError) {
+            console.error(`❌ Playwright also failed:`, browserError.message);
+        }
+    }
+    // すべての方法が失敗した場合
     const errorMessage = lastError?.response
         ? `Failed to fetch website (Status: ${lastError.response.status})`
         : lastError?.request
             ? `Failed to fetch website: No response from server (timeout or network error)`
             : `Failed to fetch website: ${lastError?.message || 'Unknown error'}`;
-    console.error(`🚫 All ${maxRetries} attempts failed for ${url}`);
+    console.error(`🚫 All attempts (axios + Playwright) failed for ${url}`);
     throw new Error(errorMessage);
 }
 // HTMLからテキストコンテンツを抽出（商品情報を優先）

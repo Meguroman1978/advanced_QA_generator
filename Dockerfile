@@ -1,9 +1,10 @@
 # Use Node.js 20 official image
 FROM node:20-slim
 
-# Install system dependencies for Puppeteer
+# Install system dependencies for Playwright/Chromium
 RUN apt-get update && apt-get install -y \
     libnss3 \
+    libnspr4 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
     libcups2 \
@@ -14,12 +15,21 @@ RUN apt-get update && apt-get install -y \
     libgtk-3-0 \
     libxshmfence1 \
     libglu1-mesa \
+    libdrm2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libxext6 \
+    libx11-6 \
+    fonts-liberation \
     chromium \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Puppeteer to use system chromium
+# Set Playwright to use system chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Set working directory
 WORKDIR /app
