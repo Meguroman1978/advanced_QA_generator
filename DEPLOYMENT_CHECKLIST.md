@@ -1,341 +1,245 @@
-# 🚀 デプロイチェックリスト - TXTボタン表示修正版
+# 🚀 デプロイチェックリスト
 
-## 🐛 報告された問題
+## ❌ 問題: GenSpark Crawlerが呼ばれていない
 
-1. ✅ チェックボックスは表示される
-2. ❌ **TXTダウンロードボタンが表示されない**（PDFボタンのみ表示）
-3. ❌ 動画情報がチェックなしでも出力される
-4. ✅ 動画情報がチェックありでも出力される
+### 確認すべき項目
 
-## 🔍 問題の原因
+#### **1. 最新コードをデプロイしたか？**
 
-### 可能性1: ブラウザキャッシュ
-- Fly.ioにデプロイ後、ブラウザが古いJSファイルをキャッシュしている
-- 解決策: 強制リロードまたはキャッシュクリア
-
-### 可能性2: Fly.ioのビルドキャッシュ
-- Fly.ioが古いビルド成果物を使用している
-- 解決策: クリーンビルドまたはボリューム削除
-
-### 可能性3: CSSの読み込み問題
-- `.text-button` や `.both-button` のスタイルが適用されていない
-- 解決策: CSSファイルが正しく配信されているか確認
-
-## ✅ 確認済み事項
-
-1. ✅ GitHubへのpushは正常完了（コミット: `9abb706`）
-2. ✅ ソースコードには3つのボタンが正しく定義されている
-3. ✅ バックエンドの `includeVideoInfo` ロジックは正しい
-4. ✅ フロントエンドのデフォルト値は `false`（正しい）
-5. ✅ ローカルビルドは成功している
-
-## 🛠️ デプロイ手順（推奨）
-
-### 方法1: 標準デプロイ（まず試す）
+以下のコマンドを**順番に**実行してください：
 
 ```bash
-cd advanced_QA_generator
-git pull origin main
-flyctl deploy --app advanced-qa-generator
-```
-
-### 方法2: クリーンデプロイ（標準で解決しない場合）
-
-```bash
-cd advanced_QA_generator
+# ステップ1: 最新コードを取得
+cd ~/advanced_QA_generator
 git pull origin main
 
-# Fly.ioのビルドキャッシュをクリア
+# ステップ2: 最新コミットを確認
+git log --oneline -5
+```
+
+**期待される出力:**
+```
+6804ab0 fix: Ensure error diagnostics are always displayed for zero Q&A results
+18ce522 docs: Add comprehensive GenSpark Crawler integration guide
+e0b556a feat: Integrate GenSpark Crawler as ultimate fallback for blocked sites
+```
+
+`e0b556a` (GenSpark Crawler統合) が含まれているか確認してください。
+
+```bash
+# ステップ3: Fly.ioにデプロイ（必須）
 flyctl deploy --app advanced-qa-generator --no-cache
 ```
 
-### 方法3: 完全リビルド（最終手段）
+⚠️ **`--no-cache` は絶対に必要です**
 
 ```bash
-cd advanced_QA_generator
-git pull origin main
-
-# アプリを再作成（データは保持される）
-flyctl apps restart advanced-qa-generator
-
-# デプロイ
-flyctl deploy --app advanced-qa-generator --no-cache
-```
-
-## 🔍 デプロイ後の確認手順
-
-### ステップ1: ブラウザキャッシュをクリア
-
-**Chrome/Edge:**
-```
-1. Ctrl+Shift+Delete を押す
-2. 「キャッシュされた画像とファイル」をチェック
-3. 「データを削除」をクリック
-```
-
-**Safari:**
-```
-1. Cmd+Option+E を押す
-2. ページをリロード（Cmd+R）
-```
-
-**Firefox:**
-```
-1. Ctrl+Shift+Delete を押す
-2. 「キャッシュ」をチェック
-3. 「今すぐ消去」をクリック
-```
-
-### ステップ2: 強制リロード
-
-**すべてのブラウザ:**
-```
-Ctrl+Shift+R (Windows)
-Cmd+Shift+R (Mac)
-```
-
-### ステップ3: デベロッパーツールで確認
-
-**F12を押して以下を確認:**
-
-#### 1. Networkタブでファイル読み込み確認
-```
-- index-*.js が最新のハッシュか確認
-- index-*.css が最新のハッシュか確認
-- Status: 200 (OK) であることを確認
-```
-
-#### 2. Elementsタブでボタン存在確認
-```
-1. 「💾 ダウンロード」セクションを選択
-2. .export-buttons の中に3つの button が存在するか
-3. display: none などの非表示スタイルがないか
-```
-
-#### 3. Consoleタブでエラー確認
-```
-- 赤いエラーメッセージがないか確認
-- includeVideoInfo: false がログに表示されるか
-```
-
-## 📊 期待される表示
-
-### 正常な表示
-
-```
-┌─────────────────────────────────────────────┐
-│ 💾 ダウンロード                              │
-├─────────────────────────────────────────────┤
-│ Q&Aをダウンロードできます（日本語対応） - 5件 │
-│                                             │
-│ ┌──────────────────────────────────────┐   │
-│ │ ☐ 推奨動画作成例を含める             │   │
-│ └──────────────────────────────────────┘   │
-│                                             │
-│ ┌──────────┐ ┌──────────┐ ┌──────────┐   │
-│ │📕 PDF   │ │📄 TXT   │ │📦 両方  │   │
-│ └──────────┘ └──────────┘ └──────────┘   │
-│                                             │
-│ ※ PDFとTXTは日本語フォント...              │
-└─────────────────────────────────────────────┘
-```
-
-**重要:** 3つのボタンが横並びで表示される
-
-### 異常な表示（現在の状態）
-
-```
-┌─────────────────────────────────────────────┐
-│ 💾 ダウンロード                              │
-├─────────────────────────────────────────────┤
-│ Q&Aをダウンロードできます（日本語対応） - 5件 │
-│                                             │
-│ ┌──────────────────────────────────────┐   │
-│ │ ☐ 推奨動画作成例を含める             │   │
-│ └──────────────────────────────────────┘   │
-│                                             │
-│ ┌──────────┐                               │
-│ │📕 PDF   │                               │  ← TXTと両方が表示されない
-│ └──────────┘                               │
-│                                             │
-│ ※ PDFとTXTは日本語フォント...              │
-└─────────────────────────────────────────────┘
-```
-
-## 🐛 トラブルシューティング
-
-### 問題1: デプロイ後もTXTボタンが表示されない
-
-**原因1: CSSファイルが古い**
-```bash
-# ブラウザのデベロッパーツール（F12）→ Networkタブ
-# index-*.css のハッシュが変わっているか確認
-
-# もし変わっていない場合:
-flyctl deploy --app advanced-qa-generator --no-cache
-```
-
-**原因2: JSファイルが古い**
-```bash
-# ブラウザのデベロッパーツール（F12）→ Networkタブ
-# index-*.js のハッシュが変わっているか確認
-
-# もし変わっていない場合:
-# 完全リビルドを実行（方法3）
-```
-
-**原因3: Fly.ioの静的ファイル配信問題**
-```bash
-# SSH接続してファイル確認
-flyctl ssh console --app advanced-qa-generator
-
-# コンテナ内で確認
-ls -la /app/dist/
-ls -la /app/dist/assets/
-```
-
-### 問題2: 動画情報がチェックなしでも出力される
-
-**デバッグ方法:**
-```javascript
-// ブラウザコンソール（F12）で確認
-// ダウンロードボタンクリック時のログ:
-includeVideoInfo: false  // ← これがfalseであることを確認
-📤 Sending 5 qaItems to server (includeVideoInfo: false)
-```
-
-**もし `true` になっている場合:**
-- チェックボックスの状態が正しく反映されていない
-- Stateの初期化に問題がある
-
-**確認方法:**
-```javascript
-// ブラウザコンソールで実行
-document.querySelector('input[type="checkbox"]').checked
-// → false であることを確認
-```
-
-### 問題3: ボタンが見切れている（レスポンシブ問題）
-
-**確認方法:**
-```
-1. ブラウザの幅を広げる
-2. ズームレベルを100%にする（Ctrl+0）
-3. F12 → Elements → .export-buttons の width を確認
-```
-
-**対処:**
-```css
-/* もし必要なら、CSSを修正 */
-.export-buttons {
-  display: flex;
-  flex-wrap: wrap;  /* ← これが設定されているか確認 */
-  gap: 15px;
-}
-```
-
-## 📝 最新コミット情報
-
-**コミットハッシュ:** `9abb706`
-
-**コミットメッセージ:**
-```
-feat: Add checkbox to control video recommendation info in exports
-```
-
-**変更されたファイル:**
-- `src/App.tsx` - includeVideoInfo state とチェックボックスUI
-- `src/App.css` - チェックボックスのスタイル
-- `server.ts` - includeVideoInfo パラメータ処理
-
-**ビルド成果物:**
-- `dist/index.html`
-- `dist/assets/index-DMGhcl1s.css` ← **このハッシュ値が重要**
-- `dist/assets/index-CkCDyg0_.js` ← **このハッシュ値が重要**
-
-## 🎯 デプロイ成功の確認方法
-
-### チェックリスト
-
-1. **Fly.ioログ確認**
-```bash
-flyctl logs --app advanced-qa-generator | tail -50
-# "Listening on port 3001" が表示されればOK
-```
-
-2. **ヘルスチェック**
-```bash
-curl https://advanced-qa-generator.fly.dev/api/health
-# {"status":"ok","version":"2.0"} が返ればOK
-```
-
-3. **静的ファイル確認**
-```bash
-curl -I https://advanced-qa-generator.fly.dev/
-# 200 OK が返ればOK
-```
-
-4. **ブラウザ確認**
-- 3つのボタンが表示される
-- チェックボックスが表示される
-- チェックなしでPDFダウンロード → 動画情報なし
-- チェックありでPDFダウンロード → 動画情報あり
-
-## 🔄 再デプロイが必要な場合
-
-もし上記の方法でも解決しない場合は、以下を試してください：
-
-### オプション1: ビルドキャッシュの完全削除
-
-```bash
-# ローカルで
-cd advanced_QA_generator
-rm -rf dist node_modules/.vite
-npm run build
-
-# Fly.ioで
-flyctl deploy --app advanced-qa-generator --no-cache
-```
-
-### オプション2: アプリの再起動
-
-```bash
-flyctl apps restart advanced-qa-generator
-# 数秒待つ
+# ステップ4: デプロイ完了を確認
 flyctl status --app advanced-qa-generator
 ```
 
-### オプション3: 新規デプロイ
-
-```bash
-# 最終手段: アプリを削除して再作成
-# ⚠️ 注意: これは環境変数も削除されます
-
-flyctl apps destroy advanced-qa-generator
-flyctl launch --name advanced-qa-generator
-# 環境変数を再設定
-flyctl secrets set OPENAI_API_KEY=your-key --app advanced-qa-generator
-flyctl secrets set NODE_ENV=production --app advanced-qa-generator
+**期待される出力:**
 ```
-
-## 📞 サポート
-
-上記すべてを試しても解決しない場合は、以下の情報を提供してください：
-
-1. ブラウザのスクリーンショット（デベロッパーツール込み）
-2. `flyctl logs --app advanced-qa-generator` の出力
-3. ブラウザコンソールのログ全文
-4. Network タブの screenshot
+Status
+  Name     = advanced-qa-generator          
+  Owner    = personal                       
+  Hostname = advanced-qa-generator.fly.dev  
+  ...
+  Status = deployed
+```
 
 ---
 
-**GitHubリポジトリ:** https://github.com/Meguroman1978/advanced_QA_generator
+#### **2. デプロイログを確認**
 
-**最新コミット:** `9abb706`
-
-**デプロイコマンド:**
 ```bash
-cd advanced_QA_generator
+flyctl logs --app advanced-qa-generator | tail -100
+```
+
+以下を探してください：
+- `Server starting on port 3001`
+- エラーメッセージがないか
+
+---
+
+#### **3. GenSpark Crawlerコードが含まれているか確認**
+
+```bash
+# ローカルでビルドされたserver.jsを確認
+cd ~/advanced_QA_generator
+grep -c "GenSpark Crawler" dist-server/server.js
+```
+
+**期待される出力:** `5` 以上（複数箇所にGenSpark Crawlerの文字列が存在）
+
+**もし `0` なら:**
+- ビルドが失敗している
+- 再度ビルド: `npm run build`
+
+---
+
+#### **4. 実際にFly.ioで動作しているコードを確認**
+
+```bash
+# Fly.ioアプリのシェルに接続
+flyctl ssh console --app advanced-qa-generator
+```
+
+シェル内で:
+```bash
+# server.jsにGenSpark Crawlerが含まれているか確認
+grep -c "GenSpark Crawler" /app/dist-server/server.js
+exit
+```
+
+**もし `0` なら:**
+- 古いコードがデプロイされている
+- 再デプロイ必須
+
+---
+
+## 🔍 デバッグ手順
+
+### **手順1: ローカルでテスト**
+
+```bash
+cd ~/advanced_QA_generator
+
+# サーバー起動
+npm start
+```
+
+別のターミナルで:
+```bash
+# テストリクエスト送信
+curl -X POST http://localhost:3001/api/workflow \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://web.hh-online.jp/hankyu-beauty/goods/index.html?ggcd=B2470245&wid=99947307794445801", "maxQA": 3, "language": "ja"}'
+```
+
+**サーバーコンソールで確認すべきログ:**
+```
+🌐 Fetching website: https://web.hh-online.jp/...
+📡 Attempt 1/3 to fetch...
+⚠️ Content contains "403 Forbidden" or blocking message.
+🔄 Trying Playwright...
+❌ Playwright failed
+🚀 Trying GenSpark Crawler...                    ← これが表示されるべき
+🌐 [GenSpark Crawler] Attempting to fetch: ...  ← これが表示されるべき
+```
+
+**もしGenSpark Crawlerのログが表示されないなら:**
+- コードに問題がある
+- フォールバックロジックが実行されていない
+
+---
+
+### **手順2: Fly.ioのリアルタイムログを確認**
+
+```bash
+flyctl logs --app advanced-qa-generator --follow
+```
+
+ブラウザで https://advanced-qa-generator.fly.dev にアクセスし、Q&A生成を実行。
+
+**期待されるログ:**
+```
+🌐 Fetching website: ...
+⚠️ Content contains "403 Forbidden"
+🔄 Trying Playwright...
+❌ Playwright failed
+🚀 Trying GenSpark Crawler...    ← 最重要
+```
+
+---
+
+## 🚨 緊急対応
+
+### **GenSpark Crawlerが全く呼ばれない場合**
+
+#### **原因1: デプロイしていない**
+**解決策:**
+```bash
+cd ~/advanced_QA_generator
 git pull origin main
 flyctl deploy --app advanced-qa-generator --no-cache
 ```
+
+#### **原因2: ビルドエラー**
+**確認:**
+```bash
+npm run build
+```
+
+エラーが表示されたら、その内容を報告してください。
+
+#### **原因3: Playwrightが成功している**
+**確認:**
+Fly.ioのログで:
+```
+✅ Playwright succeeded
+```
+
+が表示されていないか確認。もし表示されていたら、GenSpark Crawlerは呼ばれません（意図通り）。
+
+#### **原因4: フォールバックロジックが実行されない**
+**確認:**
+ログで以下が表示されているか:
+```
+⚠️ Content contains "403 Forbidden"
+```
+
+表示されていない場合、403検出ロジックに問題があります。
+
+---
+
+## ✅ 確認チェックリスト
+
+以下をすべて確認してください：
+
+- [ ] `git pull origin main` を実行した
+- [ ] `git log` で `e0b556a` (GenSpark Crawler統合) が含まれている
+- [ ] `flyctl deploy --no-cache` を実行した
+- [ ] `flyctl status` で `Status = deployed` が表示される
+- [ ] ローカルで `npm run build` が成功する
+- [ ] `grep "GenSpark Crawler" dist-server/server.js` でヒットする
+- [ ] Fly.ioで Q&A生成を試した
+- [ ] `flyctl logs --follow` でリアルタイムログを確認した
+
+---
+
+## 📝 報告テンプレート
+
+以下の情報を報告してください：
+
+**1. デプロイ状況:**
+```bash
+git log --oneline -5
+# 出力をコピー
+```
+
+**2. Fly.ioステータス:**
+```bash
+flyctl status --app advanced-qa-generator
+# 出力をコピー
+```
+
+**3. ビルド確認:**
+```bash
+grep -c "GenSpark Crawler" dist-server/server.js
+# 出力をコピー（数値）
+```
+
+**4. Fly.ioログ（最新50行）:**
+```bash
+flyctl logs --app advanced-qa-generator | tail -50
+# 出力をコピー
+```
+
+**5. ブラウザコンソールログ:**
+- F12 → Console タブ
+- `🔍 DIAGNOSTICS CHECK` 周辺のログをコピー
+
+---
+
+**重要:** まず `flyctl deploy --no-cache` を実行してください！

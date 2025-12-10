@@ -247,6 +247,13 @@ async function fetchWithBrowser(url: string): Promise<string> {
     const html = await page.content();
     
     console.log(`✅ Successfully fetched with Playwright (${html.length} bytes)`);
+    
+    // 🔍 403チェック: PlaywrightでもForbiddenページを取得していないか確認
+    if (pageTitle.includes('403') || pageTitle.includes('Forbidden') || 
+        bodyText.includes('403 Forbidden') && bodyText.length < 100) {
+      console.log(`⚠️ Playwright fetched 403 Forbidden page (title: "${pageTitle}", bodyLength: ${bodyText.length})`);
+      throw new Error('Playwright fetched 403 Forbidden page');
+    }
     console.log(`📄 HTML preview (first 500 chars): ${html.substring(0, 500)}`);
     
     // 最後の1000文字も確認（フッター確認用）
@@ -343,8 +350,14 @@ async function fetchWebsite(url: string): Promise<string> {
       
       // コンテンツに"403 Forbidden"が含まれている場合、実際はブロックされている
       const contentStr = String(response.data);
-      if (contentStr.includes('403 Forbidden') || contentStr.includes('Access Denied') || 
-          contentStr.includes('Forbidden') && contentStr.length < 1000) {
+      const is403Content = contentStr.includes('403 Forbidden') || 
+                          contentStr.includes('Access Denied') || 
+                          contentStr.includes('Forbidden');
+      const isTooSmall = response.data.length < 1000;
+      
+      console.log(`🔍 Content check: is403=${is403Content}, size=${response.data.length}, tooSmall=${isTooSmall}`);
+      
+      if (is403Content || (contentStr.includes('Forbidden') && isTooSmall)) {
         console.log(`⚠️ Content contains "403 Forbidden" or blocking message.`);
         
         // フォールバックチェーン: Playwright → GenSpark Crawler
