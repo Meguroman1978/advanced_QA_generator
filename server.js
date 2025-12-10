@@ -146,6 +146,29 @@ async function fetchWithBrowser(url) {
         await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {
             console.warn(`⚠️ NetworkIdle timeout, continuing anyway...`);
         });
+        // デバッグ: ページ情報を詳細に取得
+        const pageUrl = page.url();
+        const pageTitle = await page.title();
+        console.log(`📍 Current URL: ${pageUrl}`);
+        console.log(`📌 Page title: ${pageTitle}`);
+        // デバッグ: 主要な要素の存在確認
+        const bodyText = await page.evaluate(() => {
+            // @ts-ignore - document is available in browser context
+            const doc = document;
+            return doc.body.innerText;
+        });
+        console.log(`📝 Body text length: ${bodyText.length} chars`);
+        console.log(`📝 Body text preview (first 200 chars): ${bodyText.substring(0, 200)}`);
+        // 特定の要素が存在するか確認
+        const hasGoodsDetail = await page.evaluate(() => {
+            // @ts-ignore - document is available in browser context
+            const doc = document;
+            return !!(doc.querySelector('.goodsDetail') ||
+                doc.querySelector('.product-detail') ||
+                doc.querySelector('[class*="product"]') ||
+                doc.querySelector('h1'));
+        });
+        console.log(`🔍 Has product elements: ${hasGoodsDetail}`);
         // ページのHTMLを取得
         const html = await page.content();
         console.log(`✅ Successfully fetched with Playwright (${html.length} bytes)`);
