@@ -57,6 +57,16 @@ async function fetchWithBrowser(url: string): Promise<string> {
     
     console.log(`🚀 Launching Chromium from: ${executablePath}`);
     
+    // ランダムなUser-Agentを使用（ボット検出を回避）
+    const userAgents = [
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15'
+    ];
+    const randomUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+    console.log(`🎭 Using User-Agent: ${randomUserAgent.substring(0, 50)}...`);
+    
     browser = await chromium.launch({
       headless: true,
       executablePath: executablePath,
@@ -68,20 +78,26 @@ async function fetchWithBrowser(url: string): Promise<string> {
         '--disable-software-rasterizer',
         '--disable-web-security',
         '--disable-features=IsolateOrigins,site-per-process',
-        '--disable-blink-features=AutomationControlled', // 自動化検出を無効化
+        '--disable-blink-features=AutomationControlled',
         '--single-process',
-        '--no-zygote'
+        '--no-zygote',
+        '--disable-extensions',
+        '--disable-default-apps',
+        '--no-first-run'
       ],
       timeout: 30000
     });
     
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      viewport: { width: 1280, height: 720 },
+      userAgent: randomUserAgent,
+      viewport: { width: 1920, height: 1080 },
+      locale: 'ja-JP',
+      timezoneId: 'Asia/Tokyo',
       extraHTTPHeaders: {
-        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+        'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Referer': 'https://www.google.com/',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Cache-Control': 'max-age=0',
         'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
         'Sec-Ch-Ua-Mobile': '?0',
         'Sec-Ch-Ua-Platform': '"Windows"',
@@ -89,10 +105,10 @@ async function fetchWithBrowser(url: string): Promise<string> {
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1',
-        'DNT': '1'
+        'Upgrade-Insecure-Requests': '1'
       },
-      javaScriptEnabled: true
+      javaScriptEnabled: true,
+      permissions: ['geolocation']
     });
     
     const page = await context.newPage();
@@ -120,30 +136,69 @@ async function fetchWithBrowser(url: string): Promise<string> {
     
     console.log(`⏳ Navigating to ${url}...`);
     
-    // ページに移動
+    // まずトップページにアクセス（クッキー・セッション確立）
+    const domain = new URL(url).origin;
+    console.log(`🏠 First accessing homepage: ${domain}`);
+    
+    try {
+      await page.goto(domain, {
+        waitUntil: 'networkidle',
+        timeout: 30000
+      });
+      console.log(`✅ Homepage loaded, waiting for cookies...`);
+      await page.waitForTimeout(2000);
+    } catch (error) {
+      console.warn(`⚠️ Homepage access failed, continuing anyway...`);
+    }
+    
+    // 本来のURLにアクセス
+    console.log(`🎯 Now accessing target URL: ${url}`);
     await page.goto(url, {
-      waitUntil: 'domcontentloaded',
-      timeout: 60000
+      waitUntil: 'load', // domcontentloaded → load に変更
+      timeout: 90000 // 90秒に延長
     });
     
-    console.log(`⏳ Waiting for dynamic content (5s)...`);
+    console.log(`⏳ Waiting for JavaScript execution (10s)...`);
     
-    // JavaScriptで動的に生成されるコンテンツを待機
-    await page.waitForTimeout(5000);
+    // さらに長く待機してJavaScriptの完全実行を確認
+    await page.waitForTimeout(10000); // 5秒 → 10秒
     
-    // 人間らしいスクロール動作
-    console.log(`🖱️ Simulating human scrolling...`);
-    await page.evaluate('window.scrollTo(0, 500)');
-    await page.waitForTimeout(1000);
+    // 人間らしいスクロール動作（より詳細に）
+    console.log(`🖱️ Simulating human scrolling and interaction...`);
     
-    await page.evaluate('window.scrollTo(0, 0)');
-    await page.waitForTimeout(1000);
+    // ゆっくりスクロール
+    await page.evaluate('window.scrollTo({top: 300, behavior: "smooth"})');
+    await page.waitForTimeout(1500);
+    
+    await page.evaluate('window.scrollTo({top: 800, behavior: "smooth"})');
+    await page.waitForTimeout(1500);
+    
+    await page.evaluate('window.scrollTo({top: 1500, behavior: "smooth"})');
+    await page.waitForTimeout(1500);
+    
+    await page.evaluate('window.scrollTo({top: 0, behavior: "smooth"})');
+    await page.waitForTimeout(2000);
+    
+    // マウス移動をシミュレート
+    await page.mouse.move(100, 100);
+    await page.waitForTimeout(500);
+    await page.mouse.move(300, 300);
+    await page.waitForTimeout(500);
+    
+    // 最終的な待機（すべてのリソース読み込み完了）
+    console.log(`⏳ Final wait for all resources...`);
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {
+      console.warn(`⚠️ NetworkIdle timeout, continuing anyway...`);
+    });
     
     // ページのHTMLを取得
     const html = await page.content();
     
     console.log(`✅ Successfully fetched with Playwright (${html.length} bytes)`);
-    console.log(`📄 HTML preview (first 300 chars): ${html.substring(0, 300)}`);
+    console.log(`📄 HTML preview (first 500 chars): ${html.substring(0, 500)}`);
+    
+    // 最後の1000文字も確認（フッター確認用）
+    console.log(`📄 HTML end (last 300 chars): ${html.substring(html.length - 300)}`);
     
     await browser.close();
     return html;
