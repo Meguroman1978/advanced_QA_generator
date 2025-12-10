@@ -58,6 +58,9 @@ async function fetchWithBrowser(url) {
             ],
             timeout: 30000
         });
+        // ドメイン情報を取得（Referer用）
+        const domain = new URL(url).origin;
+        const topPageUrl = `${domain}/hankyu-beauty/`;
         const context = await browser.newContext({
             userAgent: randomUserAgent,
             viewport: { width: 1920, height: 1080 },
@@ -68,14 +71,16 @@ async function fetchWithBrowser(url) {
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                 'Accept-Encoding': 'gzip, deflate, br',
                 'Cache-Control': 'max-age=0',
+                'Referer': topPageUrl, // 🔥 重要: トップページから遷移したように見せる
                 'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
                 'Sec-Ch-Ua-Mobile': '?0',
                 'Sec-Ch-Ua-Platform': '"Windows"',
                 'Sec-Fetch-Dest': 'document',
                 'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-Site': 'same-origin', // 🔥 none → same-origin（同じサイト内遷移）
                 'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Requests': '1'
+                'Upgrade-Insecure-Requests': '1',
+                'DNT': '1' // Do Not Track（プライバシー配慮）
             },
             javaScriptEnabled: true,
             permissions: ['geolocation']
@@ -103,44 +108,60 @@ async function fetchWithBrowser(url) {
     `);
         console.log(`⏳ Navigating to ${url}...`);
         // まずトップページにアクセス（クッキー・セッション確立）
-        const domain = new URL(url).origin;
-        console.log(`🏠 First accessing homepage: ${domain}`);
+        console.log(`🏠 First accessing homepage: ${topPageUrl}`);
         try {
-            await page.goto(domain, {
+            await page.goto(topPageUrl, {
                 waitUntil: 'networkidle',
                 timeout: 30000
             });
             console.log(`✅ Homepage loaded, waiting for cookies...`);
-            await page.waitForTimeout(2000);
+            // クッキーを確認してログ出力
+            const cookies = await context.cookies();
+            console.log(`🍪 Received ${cookies.length} cookies from homepage`);
+            // ランダム待機（3-5秒）でボット検出を回避
+            const randomWait1 = Math.floor(Math.random() * 2000) + 3000; // 3000-5000ms
+            console.log(`⏳ Random wait: ${randomWait1}ms`);
+            await page.waitForTimeout(randomWait1);
         }
         catch (error) {
             console.warn(`⚠️ Homepage access failed, continuing anyway...`);
         }
-        // 本来のURLにアクセス
+        // 本来のURLにアクセス（Refererは自動で前のページになる）
         console.log(`🎯 Now accessing target URL: ${url}`);
         await page.goto(url, {
             waitUntil: 'load', // domcontentloaded → load に変更
             timeout: 90000 // 90秒に延長
         });
-        console.log(`⏳ Waiting for JavaScript execution (10s)...`);
-        // さらに長く待機してJavaScriptの完全実行を確認
-        await page.waitForTimeout(10000); // 5秒 → 10秒
-        // 人間らしいスクロール動作（より詳細に）
+        // ランダム待機（5-8秒）
+        const randomWait2 = Math.floor(Math.random() * 3000) + 5000; // 5000-8000ms
+        console.log(`⏳ Waiting for JavaScript execution (${randomWait2}ms)...`);
+        await page.waitForTimeout(randomWait2);
+        // 人間らしいスクロール動作（ランダム化）
         console.log(`🖱️ Simulating human scrolling and interaction...`);
-        // ゆっくりスクロール
-        await page.evaluate('window.scrollTo({top: 300, behavior: "smooth"})');
-        await page.waitForTimeout(1500);
-        await page.evaluate('window.scrollTo({top: 800, behavior: "smooth"})');
-        await page.waitForTimeout(1500);
-        await page.evaluate('window.scrollTo({top: 1500, behavior: "smooth"})');
-        await page.waitForTimeout(1500);
+        // ランダムなスクロール位置（300-500px）
+        const scroll1 = Math.floor(Math.random() * 200) + 300;
+        await page.evaluate(`window.scrollTo({top: ${scroll1}, behavior: "smooth"})`);
+        await page.waitForTimeout(Math.floor(Math.random() * 1000) + 1000); // 1-2秒
+        // ランダムなスクロール位置（700-900px）
+        const scroll2 = Math.floor(Math.random() * 200) + 700;
+        await page.evaluate(`window.scrollTo({top: ${scroll2}, behavior: "smooth"})`);
+        await page.waitForTimeout(Math.floor(Math.random() * 1000) + 1500); // 1.5-2.5秒
+        // ランダムなスクロール位置（1200-1800px）
+        const scroll3 = Math.floor(Math.random() * 600) + 1200;
+        await page.evaluate(`window.scrollTo({top: ${scroll3}, behavior: "smooth"})`);
+        await page.waitForTimeout(Math.floor(Math.random() * 1000) + 1500); // 1.5-2.5秒
+        // トップに戻る
         await page.evaluate('window.scrollTo({top: 0, behavior: "smooth"})');
-        await page.waitForTimeout(2000);
-        // マウス移動をシミュレート
-        await page.mouse.move(100, 100);
-        await page.waitForTimeout(500);
-        await page.mouse.move(300, 300);
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(Math.floor(Math.random() * 1000) + 2000); // 2-3秒
+        // ランダムなマウス移動
+        const mouseX1 = Math.floor(Math.random() * 300) + 100;
+        const mouseY1 = Math.floor(Math.random() * 300) + 100;
+        await page.mouse.move(mouseX1, mouseY1);
+        await page.waitForTimeout(Math.floor(Math.random() * 500) + 300); // 0.3-0.8秒
+        const mouseX2 = Math.floor(Math.random() * 500) + 200;
+        const mouseY2 = Math.floor(Math.random() * 500) + 200;
+        await page.mouse.move(mouseX2, mouseY2);
+        await page.waitForTimeout(Math.floor(Math.random() * 500) + 300); // 0.3-0.8秒
         // 最終的な待機（すべてのリソース読み込み完了）
         console.log(`⏳ Final wait for all resources...`);
         await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {
