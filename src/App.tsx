@@ -73,6 +73,36 @@ function App() {
         throw new Error(data.error || 'Failed to process workflow');
       }
 
+      // 🔍 Q&A数が0の場合、診断情報を表示
+      if (data.data?.qaItems?.length === 0 && data.data?.diagnostics) {
+        const diag = data.data.diagnostics;
+        let errorMsg = '❌ Q&A生成に失敗しました\n\n';
+        errorMsg += '【診断情報】\n';
+        errorMsg += `・ページタイトル: ${diag.pageTitle || 'N/A'}\n`;
+        errorMsg += `・HTML取得サイズ: ${diag.htmlLength} bytes\n`;
+        errorMsg += `・抽出コンテンツ長: ${diag.contentLength} 文字\n`;
+        
+        if (diag.is403) {
+          errorMsg += '\n🚫 403 Forbidden エラー\n';
+          errorMsg += '→ サイトがアクセスをブロックしています\n';
+          errorMsg += '→ このサイトはクローラーアクセスを制限しています\n\n';
+          errorMsg += '【HTMLプレビュー】\n';
+          errorMsg += diag.htmlPreview || 'N/A';
+        } else if (diag.fetchError) {
+          errorMsg += `\n⚠️ 取得エラー: ${diag.fetchError}\n`;
+        } else if (diag.contentLength < 100) {
+          errorMsg += '\n⚠️ コンテンツが短すぎます\n';
+          errorMsg += '→ ページが正常に読み込まれていない可能性があります\n';
+        }
+        
+        errorMsg += '\n\n【対策】\n';
+        errorMsg += '1. URLを再確認してください\n';
+        errorMsg += '2. 別のURLで試してください\n';
+        errorMsg += '3. サイトのアクセス制限が緩いページを選んでください';
+        
+        setError(errorMsg);
+      }
+
       setResult(data.data);
       console.log('Result set with qaItems:', data.data?.qaItems?.length, 'items');
     } catch (err) {
@@ -216,7 +246,17 @@ function App() {
         {error && (
           <div className="error">
             <h3>❌ エラー</h3>
-            <p>{error}</p>
+            <pre style={{
+              whiteSpace: 'pre-wrap',
+              wordWrap: 'break-word',
+              backgroundColor: '#f5f5f5',
+              padding: '15px',
+              borderRadius: '5px',
+              fontSize: '13px',
+              lineHeight: '1.6',
+              maxHeight: '400px',
+              overflow: 'auto'
+            }}>{error}</pre>
           </div>
         )}
 

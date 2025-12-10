@@ -948,13 +948,44 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
       });
     }
 
+    // 診断情報を収集
+    const diagnostics = {
+      fetchError: '',
+      htmlLength: 0,
+      pageTitle: '',
+      contentLength: 0,
+      is403: false,
+      cookiesReceived: 0,
+      playwrightUsed: false
+    };
+
     // ステップ1: HTTPリクエストでWebページを取得
     console.log('Fetching website:', url);
-    const html = await fetchWebsite(url);
+    let html = '';
+    try {
+      html = await fetchWebsite(url);
+      diagnostics.htmlLength = html.length;
+      
+      // 403エラーをチェック
+      if (html.includes('403 Forbidden') || html.includes('<title>403')) {
+        diagnostics.is403 = true;
+        diagnostics.fetchError = '403 Forbidden - サイトがアクセスをブロックしています';
+      }
+      
+      // ページタイトルを抽出
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (titleMatch) {
+        diagnostics.pageTitle = titleMatch[1];
+      }
+    } catch (error) {
+      diagnostics.fetchError = error instanceof Error ? error.message : String(error);
+      throw error;
+    }
 
     // ステップ2: HTMLからコンテンツを抽出
     console.log('Extracting content...');
     const extractedContent = extractContent(html);
+    diagnostics.contentLength = extractedContent.length;
 
     // ステップ3: OpenAI APIで複数のQ&Aを生成
     console.log(`[GENERATION] Starting Q&A generation with maxQA=${maxQA}, language=${language}`);
@@ -1128,7 +1159,16 @@ Example2: [Specific video title example 2]
           videosAnalyzed: 0,
           pdfsAnalyzed: 0,
           reviewsAnalyzed: 0
-        }
+        },
+        // 🔍 診断情報を追加（Q&A数が0の場合にフロントエンドで表示）
+        diagnostics: qaItems.length === 0 ? {
+          fetchError: diagnostics.fetchError,
+          htmlLength: diagnostics.htmlLength,
+          pageTitle: diagnostics.pageTitle,
+          contentLength: diagnostics.contentLength,
+          is403: diagnostics.is403,
+          htmlPreview: html.substring(0, 500)
+        } : undefined
       }
     };
     
