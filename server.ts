@@ -31,6 +31,7 @@ interface WorkflowRequest {
   url: string;
   maxQA?: number;
   language?: string;
+  sourceCode?: string; // Optional: HTML source code from browser extension
 }
 
 interface WorkflowResponse {
@@ -1032,6 +1033,7 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
     const url = req.body.url;
     const maxQA = requestMaxQA !== undefined && requestMaxQA !== null ? Number(requestMaxQA) : 5;
     const language = requestLanguage && requestLanguage.trim() !== '' ? requestLanguage : 'ja';
+    const sourceCode = req.body.sourceCode; // HTML from browser extension
 
     console.log('Parsed parameters:');
     console.log('  - url:', url);
@@ -1039,6 +1041,7 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
     console.log('  - maxQA (parsed):', maxQA, 'type:', typeof maxQA);
     console.log('  - language (raw):', requestLanguage, 'type:', typeof requestLanguage);
     console.log('  - language (parsed):', language, 'type:', typeof language);
+    console.log('  - sourceCode provided:', !!sourceCode, 'length:', sourceCode?.length || 0);
 
     if (!url) {
       console.log('Error: URL is missing');
@@ -1056,30 +1059,46 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
       contentLength: 0,
       is403: false,
       cookiesReceived: 0,
-      playwrightUsed: false
+      playwrightUsed: false,
+      usedExtension: !!sourceCode
     };
 
-    // ステップ1: HTTPリクエストでWebページを取得
-    console.log('Fetching website:', url);
+    // ステップ1: HTTPリクエストでWebページを取得（または拡張機能から受信）
     let html = '';
-    try {
-      html = await fetchWebsite(url);
+    
+    if (sourceCode) {
+      // Browser extensionから受信したHTMLを使用
+      console.log('✅ Using HTML from browser extension (bypasses all bot detection)');
+      html = sourceCode;
       diagnostics.htmlLength = html.length;
-      
-      // 403エラーをチェック
-      if (html.includes('403 Forbidden') || html.includes('<title>403')) {
-        diagnostics.is403 = true;
-        diagnostics.fetchError = '403 Forbidden - サイトがアクセスをブロックしています';
-      }
       
       // ページタイトルを抽出
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       if (titleMatch) {
         diagnostics.pageTitle = titleMatch[1];
       }
-    } catch (error) {
-      diagnostics.fetchError = error instanceof Error ? error.message : String(error);
-      throw error;
+    } else {
+      // 通常のフェッチ処理
+      console.log('Fetching website:', url);
+      try {
+        html = await fetchWebsite(url);
+        diagnostics.htmlLength = html.length;
+        
+        // 403エラーをチェック
+        if (html.includes('403 Forbidden') || html.includes('<title>403')) {
+          diagnostics.is403 = true;
+          diagnostics.fetchError = '403 Forbidden - サイトがアクセスをブロックしています';
+        }
+        
+        // ページタイトルを抽出
+        const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+        if (titleMatch) {
+          diagnostics.pageTitle = titleMatch[1];
+        }
+      } catch (error) {
+        diagnostics.fetchError = error instanceof Error ? error.message : String(error);
+        throw error;
+      }
     }
 
     // ステップ2: HTMLからコンテンツを抽出

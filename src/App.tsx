@@ -22,6 +22,8 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [includeVideoInfo, setIncludeVideoInfo] = useState(false);
+  const [useSourceCode, setUseSourceCode] = useState(false);
+  const [sourceCodeInput, setSourceCodeInput] = useState('');
 
   // API URLを環境に応じて設定
   // VITE_API_URLが設定されている場合はそれを使用
@@ -39,6 +41,32 @@ function App() {
   };
   const API_URL = getApiUrl();
 
+  // Load HTML from browser extension
+  const loadFromExtension = async () => {
+    try {
+      // @ts-ignore - Chrome extension API
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        // If running as Chrome extension or with extension API access
+        // @ts-ignore - Chrome extension API
+        chrome.storage.local.get(['extractedHTML', 'extractedURL', 'extractedTitle'], (data: any) => {
+          if (data.extractedHTML) {
+            setUrl(data.extractedURL || '');
+            setSourceCodeInput(data.extractedHTML);
+            setUseSourceCode(true);
+            alert(`✅ HTMLを読み込みました: ${data.extractedTitle || data.extractedURL}`);
+          } else {
+            alert('⚠️ 拡張機能からHTMLが見つかりませんでした。\n先に拡張機能でHTMLを抽出してください。');
+          }
+        });
+      } else {
+        alert('⚠️ この機能はChrome拡張機能が必要です。\n代わりに「ソースコードを挿入」オプションを使用してください。');
+      }
+    } catch (error) {
+      console.error('Error loading from extension:', error);
+      alert('❌ 拡張機能からの読み込みに失敗しました');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -47,12 +75,17 @@ function App() {
 
     try {
       console.log('Sending request to:', `${API_URL}/api/workflow`);
+      
+      const requestBody = useSourceCode && sourceCodeInput
+        ? { url, sourceCode: sourceCodeInput }
+        : { url };
+      
       const response = await fetch(`${API_URL}/api/workflow`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify(requestBody),
       });
 
       console.log('Response status:', response.status);
@@ -254,6 +287,90 @@ function App() {
         </div>
 
         <form onSubmit={handleSubmit} className="form">
+          <div className="browser-extension-section" style={{
+            marginBottom: '20px',
+            padding: '15px',
+            backgroundColor: '#e8f5e9',
+            borderRadius: '8px',
+            border: '2px solid #4caf50'
+          }}>
+            <h3 style={{ marginTop: 0, color: '#2e7d32' }}>🔓 ボット検知を100%回避する方法</h3>
+            <p style={{ fontSize: '14px', marginBottom: '10px' }}>
+              ブラウザ拡張機能を使用すると、阪急オンラインショップなどのボット検知サイトでも確実にアクセスできます。
+            </p>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+              <button
+                type="button"
+                onClick={loadFromExtension}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#4caf50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                📄 拡張機能からHTMLを読み込む
+              </button>
+              <button
+                type="button"
+                onClick={() => setUseSourceCode(!useSourceCode)}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: useSourceCode ? '#ff9800' : '#757575',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                {useSourceCode ? '✅ ソースコード挿入モード' : '📝 ソースコード挿入を有効化'}
+              </button>
+            </div>
+            <details style={{ fontSize: '13px', cursor: 'pointer' }}>
+              <summary style={{ fontWeight: 'bold', marginBottom: '5px' }}>拡張機能のインストール方法を表示</summary>
+              <ol style={{ paddingLeft: '20px', lineHeight: '1.6' }}>
+                <li>GitHubリポジトリの <code>BROWSER_EXTENSION</code> フォルダをダウンロード</li>
+                <li>Chromeで <code>chrome://extensions/</code> を開く</li>
+                <li>「デベロッパーモード」をON</li>
+                <li>「パッケージ化されていない拡張機能を読み込む」をクリック</li>
+                <li><code>BROWSER_EXTENSION</code> フォルダを選択</li>
+              </ol>
+            </details>
+          </div>
+
+          {useSourceCode && (
+            <div className="source-code-section" style={{
+              marginBottom: '20px',
+              padding: '15px',
+              backgroundColor: '#fff3e0',
+              borderRadius: '8px',
+              border: '2px solid #ff9800'
+            }}>
+              <label htmlFor="sourceCode" style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
+                HTMLソースコード:
+              </label>
+              <textarea
+                id="sourceCode"
+                value={sourceCodeInput}
+                onChange={(e) => setSourceCodeInput(e.target.value)}
+                placeholder="ここにHTMLソースコードを貼り付けてください..."
+                style={{
+                  width: '100%',
+                  minHeight: '200px',
+                  padding: '10px',
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc'
+                }}
+              />
+            </div>
+          )}
+
           <div className="input-group">
             <label htmlFor="url">Webサイト URL:</label>
             <input
