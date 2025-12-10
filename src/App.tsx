@@ -68,39 +68,63 @@ function App() {
       console.log('Response data.data:', data.data);
       console.log('Response data.data.qaItems:', data.data?.qaItems);
       console.log('qaItems length:', data.data?.qaItems?.length);
+      
+      // 🔍 診断情報の詳細ログ
+      console.log('🔍 DIAGNOSTICS CHECK:');
+      console.log('  - Has diagnostics?', !!data.data?.diagnostics);
+      console.log('  - Diagnostics object:', data.data?.diagnostics);
+      console.log('  - QA count:', data.data?.qaItems?.length);
 
       if (!data.success) {
         throw new Error(data.error || 'Failed to process workflow');
       }
 
       // 🔍 Q&A数が0の場合、診断情報を表示
-      if (data.data?.qaItems?.length === 0 && data.data?.diagnostics) {
-        const diag = data.data.diagnostics;
-        let errorMsg = '❌ Q&A生成に失敗しました\n\n';
-        errorMsg += '【診断情報】\n';
-        errorMsg += `・ページタイトル: ${diag.pageTitle || 'N/A'}\n`;
-        errorMsg += `・HTML取得サイズ: ${diag.htmlLength} bytes\n`;
-        errorMsg += `・抽出コンテンツ長: ${diag.contentLength} 文字\n`;
+      if (data.data?.qaItems?.length === 0) {
+        console.log('⚠️ Zero Q&As detected, checking diagnostics...');
         
-        if (diag.is403) {
-          errorMsg += '\n🚫 403 Forbidden エラー\n';
-          errorMsg += '→ サイトがアクセスをブロックしています\n';
-          errorMsg += '→ このサイトはクローラーアクセスを制限しています\n\n';
-          errorMsg += '【HTMLプレビュー】\n';
-          errorMsg += diag.htmlPreview || 'N/A';
-        } else if (diag.fetchError) {
-          errorMsg += `\n⚠️ 取得エラー: ${diag.fetchError}\n`;
-        } else if (diag.contentLength < 100) {
-          errorMsg += '\n⚠️ コンテンツが短すぎます\n';
-          errorMsg += '→ ページが正常に読み込まれていない可能性があります\n';
+        if (data.data?.diagnostics) {
+          console.log('✅ Diagnostics found, displaying error message');
+          const diag = data.data.diagnostics;
+          let errorMsg = '❌ Q&A生成に失敗しました\n\n';
+          errorMsg += '【診断情報】\n';
+          errorMsg += `・ページタイトル: ${diag.pageTitle || 'N/A'}\n`;
+          errorMsg += `・HTML取得サイズ: ${diag.htmlLength} bytes\n`;
+          errorMsg += `・抽出コンテンツ長: ${diag.contentLength} 文字\n`;
+          
+          if (diag.is403) {
+            errorMsg += '\n🚫 403 Forbidden エラー\n';
+            errorMsg += '→ サイトがアクセスをブロックしています\n';
+            errorMsg += '→ このサイトはクローラーアクセスを制限しています\n\n';
+            errorMsg += '【HTMLプレビュー】\n';
+            errorMsg += diag.htmlPreview || 'N/A';
+          } else if (diag.fetchError) {
+            errorMsg += `\n⚠️ 取得エラー: ${diag.fetchError}\n`;
+          } else if (diag.contentLength < 100) {
+            errorMsg += '\n⚠️ コンテンツが短すぎます\n';
+            errorMsg += '→ ページが正常に読み込まれていない可能性があります\n';
+          }
+          
+          errorMsg += '\n\n【対策】\n';
+          errorMsg += '1. URLを再確認してください\n';
+          errorMsg += '2. 別のURLで試してください\n';
+          errorMsg += '3. サイトのアクセス制限が緩いページを選んでください';
+          
+          console.log('📤 Setting error message:', errorMsg.substring(0, 100) + '...');
+          setError(errorMsg);
+          // エラーがある場合は result を設定しない
+          setResult(null);
+          return; // 早期リターン
+        } else {
+          console.log('❌ No diagnostics found in response');
+          // 診断情報がない場合のフォールバック
+          const fallbackError = '❌ Q&A生成に失敗しました。\n\nサーバーから診断情報を取得できませんでした。\n\n対策:\n1. ページを再読み込みしてください\n2. 別のURLで試してください\n3. サーバーログを確認してください';
+          setError(fallbackError);
+          setResult(null);
+          return; // 早期リターン
         }
-        
-        errorMsg += '\n\n【対策】\n';
-        errorMsg += '1. URLを再確認してください\n';
-        errorMsg += '2. 別のURLで試してください\n';
-        errorMsg += '3. サイトのアクセス制限が緩いページを選んでください';
-        
-        setError(errorMsg);
+      } else {
+        console.log('✅ Q&As generated successfully:', data.data?.qaItems?.length);
       }
 
       setResult(data.data);
@@ -244,8 +268,14 @@ function App() {
         )}
 
         {error && (
-          <div className="error">
-            <h3>❌ エラー</h3>
+          <div className="error" style={{
+            backgroundColor: '#ffebee',
+            border: '2px solid #f44336',
+            borderRadius: '8px',
+            padding: '20px',
+            marginBottom: '20px'
+          }}>
+            <h3 style={{ color: '#d32f2f', marginTop: 0 }}>❌ エラー</h3>
             <pre style={{
               whiteSpace: 'pre-wrap',
               wordWrap: 'break-word',
@@ -255,7 +285,8 @@ function App() {
               fontSize: '13px',
               lineHeight: '1.6',
               maxHeight: '400px',
-              overflow: 'auto'
+              overflow: 'auto',
+              margin: 0
             }}>{error}</pre>
           </div>
         )}

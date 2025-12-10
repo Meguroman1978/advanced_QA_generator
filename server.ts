@@ -1253,6 +1253,19 @@ Example2: [Specific video title example 2]
     };
     
     console.log(`✅ Response: Generated ${qaItems.length} Q&A items`);
+    
+    // 🔍 診断情報のデバッグログ
+    if (qaItems.length === 0) {
+      console.log('🔍 DIAGNOSTICS DEBUG:');
+      console.log('  - diagnostics object exists:', !!responseData.data.diagnostics);
+      console.log('  - fetchError:', diagnostics.fetchError);
+      console.log('  - htmlLength:', diagnostics.htmlLength);
+      console.log('  - pageTitle:', diagnostics.pageTitle);
+      console.log('  - contentLength:', diagnostics.contentLength);
+      console.log('  - is403:', diagnostics.is403);
+      console.log('  - htmlPreview length:', html.substring(0, 500).length);
+    }
+    
     console.log(`📤 Sending response with ${JSON.stringify(responseData).length} bytes`);
     res.json(responseData);
   } catch (error: any) {
