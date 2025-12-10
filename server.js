@@ -213,14 +213,43 @@ async function fetchWithBrowser(url) {
         throw error;
     }
 }
+// GenSpark Crawlerツールを使用してコンテンツを取得
+async function fetchWithGenSparkCrawler(url) {
+    console.log(`🌐 [GenSpark Crawler] Attempting to fetch: ${url}`);
+    try {
+        // crawler ツールを使用（GenSpark環境で利用可能）
+        const response = await fetch('https://www.genspark.ai/api/crawler/v1/crawl', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url })
+        });
+        if (!response.ok) {
+            throw new Error(`GenSpark Crawler failed with status: ${response.status}`);
+        }
+        const data = await response.json();
+        const content = (data.content || data.html || '');
+        if (!content) {
+            throw new Error('GenSpark Crawler returned empty content');
+        }
+        console.log(`✅ [GenSpark Crawler] Successfully fetched ${content.length} bytes`);
+        return content;
+    }
+    catch (error) {
+        console.error(`❌ [GenSpark Crawler] Failed:`, error instanceof Error ? error.message : String(error));
+        throw error;
+    }
+}
 // HTTPリクエストを実行してHTMLを取得（通常のブラウザとして振る舞う）
-// まずaxiosで試行し、403エラーの場合はPuppeteerにフォールバック
+// まずaxiosで試行し、403エラーの場合はPuppeteerにフォールバック、最後にGenSpark Crawler
 async function fetchWebsite(url) {
     console.log(`🌐 Fetching website: ${url}`);
     // リトライ設定
     const maxRetries = 3;
     let lastError;
     let usedPuppeteer = false;
+    let usedGenSparkCrawler = false;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             console.log(`📡 Attempt ${attempt}/${maxRetries} to fetch ${url}`);
@@ -248,16 +277,31 @@ async function fetchWebsite(url) {
             const contentStr = String(response.data);
             if (contentStr.includes('403 Forbidden') || contentStr.includes('Access Denied') ||
                 contentStr.includes('Forbidden') && contentStr.length < 1000) {
-                console.log(`⚠️ Content contains "403 Forbidden" or blocking message. Trying Playwright...`);
+                console.log(`⚠️ Content contains "403 Forbidden" or blocking message.`);
+                // フォールバックチェーン: Playwright → GenSpark Crawler
                 if (!usedPuppeteer) {
+                    console.log(`🔄 Trying Playwright...`);
                     try {
                         const html = await fetchWithBrowser(url);
+                        console.log(`✅ Playwright succeeded`);
                         return html;
                     }
                     catch (browserError) {
                         console.error(`❌ Playwright failed:`, browserError.message);
                         usedPuppeteer = true;
-                        // フォールバックして通常レスポンスを返す
+                    }
+                }
+                // Playwrightが失敗したら、GenSpark Crawlerを試す
+                if (!usedGenSparkCrawler) {
+                    console.log(`🚀 Trying GenSpark Crawler...`);
+                    try {
+                        const html = await fetchWithGenSparkCrawler(url);
+                        console.log(`🎉 GenSpark Crawler succeeded!`);
+                        return html;
+                    }
+                    catch (crawlerError) {
+                        console.error(`❌ GenSpark Crawler failed:`, crawlerError.message);
+                        usedGenSparkCrawler = true;
                     }
                 }
             }
@@ -271,17 +315,34 @@ async function fetchWebsite(url) {
                 console.error(`❌ Attempt ${attempt} failed with status ${error.response.status}`);
                 console.error(`   Response headers:`, error.response.headers);
                 console.error(`   Response data:`, error.response.data?.substring(0, 200));
-                // 403エラー（アクセス拒否）の場合、Playwrightを試行
-                if (error.response.status === 403 && !usedPuppeteer) {
-                    console.log(`🔄 403 Forbidden detected. Switching to Playwright (real browser)...`);
-                    try {
-                        const html = await fetchWithBrowser(url);
-                        return html;
+                // 403エラー（アクセス拒否）の場合、フォールバックチェーン実行
+                if (error.response.status === 403) {
+                    console.log(`🔄 403 Forbidden detected. Starting fallback chain...`);
+                    // フォールバック1: Playwright
+                    if (!usedPuppeteer) {
+                        console.log(`🔄 Trying Playwright (real browser)...`);
+                        try {
+                            const html = await fetchWithBrowser(url);
+                            console.log(`✅ Playwright succeeded`);
+                            return html;
+                        }
+                        catch (browserError) {
+                            console.error(`❌ Playwright failed:`, browserError.message);
+                            usedPuppeteer = true;
+                        }
                     }
-                    catch (browserError) {
-                        console.error(`❌ Playwright also failed:`, browserError.message);
-                        usedPuppeteer = true;
-                        // Playwright失敗後も通常のリトライを続行
+                    // フォールバック2: GenSpark Crawler
+                    if (!usedGenSparkCrawler) {
+                        console.log(`🚀 Trying GenSpark Crawler...`);
+                        try {
+                            const html = await fetchWithGenSparkCrawler(url);
+                            console.log(`🎉 GenSpark Crawler succeeded!`);
+                            return html;
+                        }
+                        catch (crawlerError) {
+                            console.error(`❌ GenSpark Crawler failed:`, crawlerError.message);
+                            usedGenSparkCrawler = true;
+                        }
                     }
                 }
             }
@@ -317,13 +378,25 @@ async function fetchWebsite(url) {
             console.error(`❌ Playwright also failed:`, browserError.message);
         }
     }
+    // 🚀 最終フォールバック: GenSpark Crawlerを試行（まだ使用していない場合）
+    if (!usedGenSparkCrawler) {
+        console.log(`🚀 Trying GenSpark Crawler as final fallback...`);
+        try {
+            const html = await fetchWithGenSparkCrawler(url);
+            console.log(`🎉 GenSpark Crawler succeeded! HTML length: ${html.length} bytes`);
+            return html;
+        }
+        catch (crawlerError) {
+            console.error(`❌ GenSpark Crawler also failed:`, crawlerError.message);
+        }
+    }
     // すべての方法が失敗した場合
     const errorMessage = lastError?.response
-        ? `Failed to fetch website (Status: ${lastError.response.status})`
+        ? `Failed to fetch website (Status: ${lastError.response.status}). All methods (axios, Playwright, GenSpark Crawler) failed.`
         : lastError?.request
-            ? `Failed to fetch website: No response from server (timeout or network error)`
-            : `Failed to fetch website: ${lastError?.message || 'Unknown error'}`;
-    console.error(`🚫 All attempts (axios + Playwright) failed for ${url}`);
+            ? `Failed to fetch website: No response from server (timeout or network error). All methods failed.`
+            : `Failed to fetch website: ${lastError?.message || 'Unknown error'}. All methods failed.`;
+    console.error(`🚫 All attempts (axios + Playwright + GenSpark Crawler) failed for ${url}`);
     throw new Error(errorMessage);
 }
 // HTMLからテキストコンテンツを抽出（商品情報を優先）
