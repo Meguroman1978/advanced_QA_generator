@@ -538,7 +538,8 @@ function extractContent(html: string): string {
           jsonLdContent += `サイズ: ${product.size?.name || ''}\n`;
           jsonLdContent += `色: ${product.color || ''}\n`;
           jsonLdContent += `SKU: ${product.sku || ''}\n`;
-          jsonLdContent += `在庫状況: ${product.offers?.availability?.includes('InStock') ? '在庫あり' : ''}\n`;
+          // 在庫状況は除外（在庫関連Q&A生成を防ぐため）
+          // jsonLdContent += `在庫状況: ${product.offers?.availability?.includes('InStock') ? '在庫あり' : ''}\n`;
           console.log('📦 JSON-LD product info extracted:', jsonLdContent.length, 'chars');
         }
       }
@@ -861,10 +862,11 @@ async function generateQA(content: string, maxQA: number = 5, language: string =
   });
 
   // コンテンツが少ない場合の対応
-  // OCRモードの場合は、文字数に関わらず「低品質」として扱う（ノイジーなデータ）
-  // URLモードの場合は、文字数で判定（extractContent()の出力は高品質）
+  // 重要な修正: URLモードは常に厳格なプロンプトを使用する
+  // - OCRモード: 常に緩いプロンプト（ノイジーなデータのため）
+  // - URLモード: 常に厳格なプロンプト（extractContent()の出力は高品質のため）
   const isLowContent = content.length < 500;
-  const isVeryLowContent = isOCRMode ? true : (content.length < 1000); // OCRモードは常にtrue
+  const isVeryLowContent = isOCRMode ? true : false; // URLモードは常にfalse（厳格）
   
   console.log(`🔍 Content quality assessment:`);
   console.log(`  - isOCRMode: ${isOCRMode}`);
