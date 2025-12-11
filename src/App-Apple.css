@@ -272,6 +272,38 @@ body {
   cursor: not-allowed;
 }
 
+.button-primary-apple {
+  background: var(--apple-blue);
+}
+
+.button-primary-apple:hover:not(:disabled) {
+  background: var(--apple-light-blue);
+}
+
+.button-secondary-apple {
+  background: var(--apple-gray);
+}
+
+.button-secondary-apple:hover:not(:disabled) {
+  background: #6e6e73;
+}
+
+.button-success-apple {
+  background: #34c759;
+}
+
+.button-success-apple:hover:not(:disabled) {
+  background: #30b350;
+}
+
+.button-danger-apple {
+  background: #ff3b30;
+}
+
+.button-danger-apple:hover:not(:disabled) {
+  background: #ff453a;
+}
+
 /* 統計カード */
 .stats-apple {
   background: var(--apple-white);
@@ -653,6 +685,77 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* エラー表示 */
+.error-apple {
+  padding: 32px;
+  background: #ffe5e5;
+  border: 2px solid #ff3b30;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.error-apple h3 {
+  color: #d32f2f;
+  font-size: 21px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+.error-apple p {
+  color: #c62828;
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* 警告表示 */
+.warning-apple {
+  padding: 32px;
+  background: #fff9e6;
+  border: 2px solid #ff9500;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.warning-apple h3 {
+  color: #1d1d1f;
+  font-size: 21px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+.warning-apple p {
+  color: #86868b;
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 8px 0;
+}
+
+/* 言語選択 */
+.language-selection-apple {
+  margin-bottom: 32px !important;
+}
+
+.language-select-apple {
+  width: auto !important;
+  min-width: 200px;
+}
+
+.section-title-apple {
+  font-size: 20px !important;
+  font-weight: 600;
+  color: var(--apple-black);
+  margin-bottom: 16px;
+}
+
+/* プログレスステージコンテナ */
+.progress-stage-container-apple {
+  display: flex;
+  align-items: center;
 }
 
 /* レスポンシブ */
