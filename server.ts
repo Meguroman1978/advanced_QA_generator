@@ -1172,8 +1172,36 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
     // ステップ3: OpenAI APIで複数のQ&Aを生成
     console.log(`[GENERATION] Starting Q&A generation with maxQA=${maxQA}, language=${language}`);
     console.log(`[GENERATION] Content length: ${extractedContent.length} characters`);
-    const qaList = await generateQA(extractedContent, maxQA, language, effectiveUrl);
-    console.log(`[GENERATION] Generated ${qaList.length} Q&A items`);
+    console.log(`[GENERATION] Content preview:`, extractedContent.substring(0, 300));
+    
+    let qaList: Array<{question: string, answer: string}> = [];
+    try {
+      qaList = await generateQA(extractedContent, maxQA, language, effectiveUrl);
+      console.log(`[GENERATION] Generated ${qaList.length} Q&A items`);
+      console.log(`[GENERATION] Q&A generation completed successfully`);
+      
+      if (qaList.length === 0) {
+        console.error('❌❌❌ CRITICAL: Q&A generation returned 0 items ❌❌❌');
+        console.error('[GENERATION] Input content length:', extractedContent.length);
+        console.error('[GENERATION] Requested maxQA:', maxQA);
+        console.error('[GENERATION] Language:', language);
+        console.error('[GENERATION] Full content:', extractedContent);
+        
+        return res.status(400).json({
+          success: false,
+          error: `Q&A生成に失敗しました。\n\n考えられる原因:\n1. コンテンツが短すぎる（${extractedContent.length}文字）\n2. OpenAI APIエラー（残高不足またはレート制限）\n3. プロンプトが厳しすぎる\n\nデバッグ情報:\n- コンテンツ長: ${extractedContent.length}文字\n- 要求Q&A数: ${maxQA}個\n- 使用言語: ${language}\n\nFly.ioログで詳細を確認してください。`,
+          details: {
+            contentLength: extractedContent.length,
+            maxQA: maxQA,
+            language: language,
+            contentPreview: extractedContent.substring(0, 500)
+          }
+        } as any);
+      }
+    } catch (generateError) {
+      console.error('❌ Q&A generation threw an error:', generateError);
+      throw generateError;
+    }
 
     // 動画推奨が必要かどうかを判定する関数
     const needsVideoExplanation = (question: string, answer: string): boolean => {
@@ -1745,14 +1773,35 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
     
     const qaList = await generateQA(combinedText, maxQA, language, url);
     console.log(`✅ ${qaList.length}個のQ&Aを生成しました`);
+    console.log('📊 Q&A生成結果の詳細:');
+    console.log('  - 生成されたQ&A数:', qaList.length);
+    console.log('  - 要求されたmaxQA:', maxQA);
+    console.log('  - 使用言語:', language);
+    console.log('  - 入力テキスト長:', combinedText.length);
     
     // Q&Aが0個の場合は詳細ログ
     if (qaList.length === 0) {
-      console.error('❌ ERROR: No Q&As generated!');
+      console.error('❌❌❌ CRITICAL ERROR: No Q&As generated! ❌❌❌');
       console.error('  - maxQA requested:', maxQA);
       console.error('  - language:', language);
       console.error('  - text length:', combinedText.length);
       console.error('  - text sample:', combinedText.substring(0, 500));
+      console.error('  - FULL TEXT:', combinedText);
+      
+      // エラーレスポンスを返す
+      return res.status(400).json({
+        success: false,
+        error: `OCRからQ&Aを生成できませんでした。\n\n考えられる原因:\n1. 画像からのテキスト抽出量が不十分（${combinedText.length}文字）\n2. OpenAI APIエラー（残高不足またはレート制限）\n3. プロンプトが厳しすぎる\n\nデバッグ情報:\n- 抽出テキスト長: ${combinedText.length}文字\n- 要求Q&A数: ${maxQA}個\n- 使用言語: ${language}\n\nFly.ioログで詳細を確認してください。`,
+        data: {
+          diagnostics: {
+            extractedTextLength: combinedText.length,
+            filesProcessed: files.length,
+            extractedText: combinedText,
+            maxQA: maxQA,
+            language: language
+          }
+        }
+      });
     }
     
     // 動画推奨が必要かどうかを判定する関数
