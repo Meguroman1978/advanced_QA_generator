@@ -307,12 +307,12 @@ function App() {
         <form onSubmit={handleSubmit} className="form">
           <div className="browser-extension-section" style={{
             marginBottom: '20px',
-            padding: '15px',
-            backgroundColor: '#e8f5e9',
+            padding: '20px',
+            backgroundColor: '#f0f7fa',
             borderRadius: '8px',
-            border: '2px solid #4caf50'
+            border: '1px solid #c5d9e0'
           }}>
-            <h3 style={{ marginTop: 0, color: '#2e7d32' }}>🔓 ボット検知を100%回避する方法</h3>
+            <h3 style={{ marginTop: 0, color: '#2c3e50', fontSize: '1.3rem', fontWeight: '600' }}>🔓 ボット検知を100%回避する方法</h3>
             <p style={{ fontSize: '14px', marginBottom: '10px' }}>
               <strong>Chrome拡張機能を使用した手順：</strong>
             </p>
@@ -334,7 +334,7 @@ function App() {
                 }}
                 style={{
                   padding: '10px 20px',
-                  backgroundColor: useSourceCode ? '#ff9800' : '#4caf50',
+                  backgroundColor: useSourceCode ? '#5b8fb9' : '#7fb069',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -353,7 +353,7 @@ function App() {
                 }}
                 style={{
                   padding: '10px 20px',
-                  backgroundColor: useImageOCR ? '#2196f3' : '#757575',
+                  backgroundColor: useImageOCR ? '#5b8fb9' : '#95a5a6',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
