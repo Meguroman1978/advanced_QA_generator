@@ -489,6 +489,35 @@ function extractContent(html) {
     // L. フォーム（商品関連以外）
     $('form').not('[class*="product"], [class*="cart"], [class*="wishlist"]').remove();
     $('input, select, textarea, button').not('[class*="product"], [class*="quantity"], [class*="size"], [class*="color"]').remove();
+    // M. 店舗在庫・在庫確認システム関連（徹底的に削除）
+    $('[class*="store-inventory"], [class*="storeInventory"], [id*="store-inventory"]').remove();
+    $('[class*="store"], [class*="shop"]').not('[class*="product"], [class*="online"]').remove();
+    $('[class*="stock"], [class*="inventory"]').not('[class*="product"]').remove();
+    $('[class*="availability"]').not('[class*="product"]').remove();
+    // N. テキストベースの削除（特定のフレーズを含む要素を削除）
+    // 【重要】店舗在庫・サイト機能関連のフレーズを徹底的に削除
+    const elementExcludePhrases = [
+        '店舗在庫', '他の店舗', '在庫を確認', '店舗の在庫', '店舗から',
+        '店舗受け取り', '店舗情報', '営業時間', 'ご来店', '来店',
+        'お問い合わせ', '配送について', '送料について', '返品について',
+        'ポイント', '会員登録', 'ログイン', 'マイページ',
+        'お支払い方法', '決済方法', 'クレジットカード',
+        '個人情報', 'プライバシー', '利用規約', '特定商取引法',
+        'メールマガジン', 'ニュースレター',
+        'よくある質問', 'FAQ', 'ヘルプ', 'ガイド',
+        'お気に入り', 'ウィッシュリスト', 'カート', 'チェックアウト'
+    ];
+    $('*').each(function () {
+        const elem = $(this);
+        const text = elem.text();
+        // 除外フレーズが含まれている場合、その要素を削除
+        for (const phrase of elementExcludePhrases) {
+            if (text.includes(phrase)) {
+                elem.remove();
+                return; // この要素は削除したので次へ
+            }
+        }
+    });
     // 【ステップ2】商品情報が含まれるメインコンテナを特定（最も重要）
     const mainContentSelectors = [
         // 最優先: 明確な商品コンテナ
@@ -558,6 +587,24 @@ function extractContent(html) {
     // 低優先: その他の段落（ページ下部）
     mainContainer.find('p, div, section').each((_, elem) => {
         const text = $(elem).text().trim();
+        // 【追加フィルタリング】サイト機能関連のテキストを完全除外
+        const textExcludePhrases = [
+            '店舗在庫', '他の店舗', '在庫を確認', '店舗の在庫', '店舗から',
+            '店舗受け取り', '店舗情報', '営業時間', 'ご来店', '来店',
+            'お問い合わせ', '配送について', '送料について', '返品について',
+            'ポイント', '会員登録', 'ログイン', 'マイページ',
+            'お支払い方法', '決済方法', 'クレジットカード',
+            '個人情報', 'プライバシー', '利用規約', '特定商取引法',
+            'メールマガジン', 'ニュースレター',
+            'よくある質問', 'FAQ', 'ヘルプ', 'ガイド',
+            'お気に入り', 'ウィッシュリスト', 'カート', 'チェックアウト',
+            'レビューを書く', '口コミ', '評価する'
+        ];
+        // 除外フレーズが含まれているテキストはスキップ
+        const shouldExclude = textExcludePhrases.some(phrase => text.includes(phrase));
+        if (shouldExclude) {
+            return; // このテキストは除外
+        }
         // 長すぎず短すぎない、意味のあるテキストのみ
         if (text && text.length > 30 && text.length < 1000) {
             // すでに抽出済みのテキストと重複していないかチェック
@@ -573,9 +620,31 @@ function extractContent(html) {
         .map(section => section.text)
         .join(' ');
     // テキストを整形
-    const cleanedContent = extractedContent
+    let cleanedContent = extractedContent
         .replace(/\s+/g, ' ') // 連続する空白を1つに
         .replace(/\n+/g, ' ') // 改行を空白に
+        .trim();
+    // 【最終フィルタリング】サイト機能関連のフレーズを含む文を削除
+    const sentenceExcludePhrases = [
+        '店舗在庫', '他の店舗', '在庫を確認', '店舗の在庫', '店舗から', '店舗受け取り',
+        '店舗情報', '営業時間', 'ご来店', '来店', 'アクセス方法',
+        'お問い合わせ', '配送について', '送料について', '返品について', '交換について',
+        'ポイント', '会員登録', 'ログイン', 'マイページ', 'アカウント',
+        'お支払い方法', '決済方法', 'クレジットカード', '代金引換',
+        '個人情報', 'プライバシー', '利用規約', '特定商取引法',
+        'メールマガジン', 'ニュースレター', '購読',
+        'よくある質問', 'FAQ', 'ヘルプ', 'ガイド', 'サポート',
+        'お気に入り', 'ウィッシュリスト', 'カート', 'チェックアウト',
+        'レビューを書く', '口コミ', '評価する', 'コメント'
+    ];
+    // 文単位で除外フレーズをチェックし削除
+    const sentences = cleanedContent.split(/[。.]/);
+    cleanedContent = sentences
+        .filter(sentence => {
+        // 除外フレーズが含まれている文は除外
+        return !sentenceExcludePhrases.some(phrase => sentence.includes(phrase));
+    })
+        .join('。')
         .trim();
     console.log(`✅ Extracted ${cleanedContent.length} characters (${productInfoSections.length} sections)`);
     console.log(`📊 Priority distribution: P1=${productInfoSections.filter(s => s.priority === 1).length}, P2=${productInfoSections.filter(s => s.priority === 2).length}, P3=${productInfoSections.filter(s => s.priority === 3).length}, P4=${productInfoSections.filter(s => s.priority === 4).length}`);
@@ -719,7 +788,11 @@ ${content}
 - **可能な限り${maxQA}個に近いQ&Aを日本語で生成してください**（最低でも${Math.floor(maxQA * 0.5)}個以上）
 - すべての回答はソーステキストに記載されている情報のみを使用してください
 - ソーステキストに記載されていない商品や情報については一切言及しないでください
-- **情報が限られている場合でも、既存の情報から異なる角度や視点で質問を生成してください**`,
+- **情報が限られている場合でも、既存の情報から異なる角度や視点で質問を生成してください**
+
+【生成後の最終確認】
+生成したすべてのQ&Aをチェックし、以下のいずれかの語句が含まれる質問は削除してください:
+「購入」「配送」「送料」「店舗」「在庫」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認方法」`,
         en: `You are a product-focused Q&A expert. Create ${maxQA} Q&A pairs in ENGLISH about **THE MAIN PRODUCT ONLY** featured on this page.
 
 🎯 【PRIMARY MISSION】
@@ -804,7 +877,11 @@ ${content}
 - **Generate as close to ${maxQA} Q&A pairs as possible** (minimum ${Math.floor(maxQA * 0.5)}+)
 - All answers must use ONLY information stated in the source text
 - Do NOT mention any products not listed in the source text
-- **Even with limited information, create questions from different angles and perspectives**`,
+- **Even with limited information, create questions from different angles and perspectives**
+
+【FINAL VERIFICATION】
+After generating all Q&As, check and DELETE any questions containing these terms:
+"purchase" "shipping" "delivery" "store" "stock" "points" "member" "return" "exchange" "warranty" "review" "comment" "contact" "register" "login" "payment" "checkout" "restock" "how to check"`,
         zh: `你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
 
 【绝对规则】
@@ -844,7 +921,11 @@ ${content}
 - **尽可能生成接近${maxQA}个的问答对**（最少${Math.floor(maxQA * 0.5)}个以上）
 - 所有答案必须仅使用源文本中说明的信息
 - 不要提及源文本中未列出的任何产品
-- **即使信息有限，也要从不同角度和视角创建问题**`
+- **即使信息有限，也要从不同角度和视角创建问题**
+
+【最终验证】
+生成所有问答后，检查并删除包含以下术语的问题：
+"购买""配送""运费""店铺""库存""积分""会员""退货""换货""保修""评论""留言""联系""注册""登录""支付""结账""补货""如何查看"`
     };
     try {
         const prompt = languagePrompts[language] || languagePrompts['ja'];
