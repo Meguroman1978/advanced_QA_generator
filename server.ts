@@ -1726,8 +1726,19 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
     console.log('  - maxQA:', maxQA);
     console.log('  - language:', language);
     console.log('  - Combined text length:', combinedText.length, 'characters');
+    console.log('  - Text preview:', combinedText.substring(0, 200));
+    
     const qaList = await generateQA(combinedText, maxQA, language, url);
     console.log(`✅ ${qaList.length}個のQ&Aを生成しました`);
+    
+    // Q&Aが0個の場合は詳細ログ
+    if (qaList.length === 0) {
+      console.error('❌ ERROR: No Q&As generated!');
+      console.error('  - maxQA requested:', maxQA);
+      console.error('  - language:', language);
+      console.error('  - text length:', combinedText.length);
+      console.error('  - text sample:', combinedText.substring(0, 500));
+    }
     
     // 動画推奨が必要かどうかを判定する関数
     const needsVideoExplanation = (question: string, answer: string): boolean => {

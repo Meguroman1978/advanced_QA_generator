@@ -379,8 +379,9 @@ function AppAdvanced() {
       // Check if no Q&A were generated and show helpful message
       if (!data.data?.qaItems || data.data.qaItems.length === 0) {
         console.warn('[WARNING] No Q&A items generated');
+        console.warn('[WARNING] Response data:', JSON.stringify(data.data, null, 2));
         if (useImageOCR) {
-          setError('画像からQ&Aを生成できませんでした。画像に十分なテキスト情報が含まれているか確認してください。');
+          setError('画像からQ&Aを生成できませんでした。\n\n考えられる原因:\n1. 画像のテキストが不鮮明\n2. OpenAI APIエラー\n3. API残高不足\n\nブラウザコンソール（F12）で詳細を確認してください。');
         } else if (hasValidUrl) {
           setError('URLからQ&Aを生成できませんでした。サイトがアクセス制限されている可能性があります。「クローラーアクセス禁止サイトを対象にする際の作業方法」をお試しください。');
         } else {
@@ -860,15 +861,16 @@ function AppAdvanced() {
                             }}
                             className="button-apple"
                             style={{
-                              padding: '12px 20px',
+                              padding: '6px 12px',
                               backgroundColor: '#ff3b30',
                               color: 'white',
                               border: 'none',
-                              borderRadius: '12px',
+                              borderRadius: '8px',
                               cursor: 'pointer',
-                              fontSize: '14px',
+                              fontSize: '12px',
                               fontWeight: '600',
-                              whiteSpace: 'nowrap'
+                              whiteSpace: 'nowrap',
+                              minWidth: 'auto'
                             }}
                           >
                             🗑️ {t('deleteButton')}
