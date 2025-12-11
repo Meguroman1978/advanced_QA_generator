@@ -206,6 +206,7 @@ export const translations = {
     sourceCodeModePasted: 'HTMLが貼り付けられました（{size} KB）',
     sourceCodeDeleteButton: '削除',
     sourceCodeDeleted: 'ソースコードを削除しました',
+    imagesDeleted: '画像を削除しました',
   },
   
   en: {
@@ -412,6 +413,7 @@ export const translations = {
     sourceCodeModePasted: 'HTML pasted ({size} KB)',
     sourceCodeDeleteButton: 'Delete',
     sourceCodeDeleted: 'Source code deleted',
+    imagesDeleted: 'Images deleted',
   },
   
   zh: {
@@ -618,6 +620,7 @@ export const translations = {
     sourceCodeModePasted: '已粘贴HTML（{size} KB）',
     sourceCodeDeleteButton: '删除',
     sourceCodeDeleted: '已删除源代码',
+    imagesDeleted: '已删除图像',
   }
 };
 

@@ -1524,22 +1524,46 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
         console.log('  - Combined text length:', combinedText.length, 'characters');
         const qaList = await generateQA(combinedText, maxQA, language, url);
         console.log(`✅ ${qaList.length}個のQ&Aを生成しました`);
-        // レスポンス
+        // 動画推奨が必要かどうかを判定する関数
+        const needsVideoExplanation = (question, answer) => {
+            const videoKeywords = [
+                '方法', '手順', '使い方', '操作', '設定', '取り付け', '組み立て', 'やり方',
+                '仕組み', '構造', '動作', '機能', 'デザイン', '外観', '見た目',
+                'how', 'step', 'method', 'procedure', 'setup', 'install', 'assemble',
+                'build', 'create', 'make', 'configure', 'adjust', 'change', 'replace',
+            ];
+            const text = `${question} ${answer}`.toLowerCase();
+            return videoKeywords.some(keyword => text.includes(keyword.toLowerCase()));
+        };
+        // レスポンス（必要なフィールドを全て含める）
         res.json({
             success: true,
             data: {
-                url: url,
+                url: url || 'ocr-images',
                 extractedContent: combinedText.substring(0, 500) + '...',
                 qaResult: qaList.map((qa, i) => `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`).join('\n\n'),
-                qaItems: qaList.map((qa, index) => ({
-                    id: String(index + 1),
-                    question: qa.question,
-                    answer: qa.answer
-                })),
+                qaItems: qaList.map((qa, index) => {
+                    const needsVideo = needsVideoExplanation(qa.question, qa.answer);
+                    return {
+                        id: String(index + 1),
+                        question: qa.question,
+                        answer: qa.answer,
+                        source: '収集した情報から生成',
+                        sourceType: 'image-ocr',
+                        url: url || 'ocr-images',
+                        needsVideo: needsVideo,
+                        videoReason: needsVideo ? '視覚的な説明が効果的です' : undefined,
+                        videoExamples: needsVideo ? ['操作手順の動画', 'デモンストレーション'] : undefined
+                    };
+                }),
                 robotsAllowed: true,
                 stats: {
                     totalPages: 1,
                     imagesProcessed: files.length,
+                    imagesAnalyzed: files.length,
+                    videosAnalyzed: 0,
+                    pdfsAnalyzed: 0,
+                    reviewsAnalyzed: 0,
                     textExtracted: combinedText.length
                 }
             }

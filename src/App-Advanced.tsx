@@ -327,22 +327,21 @@ function AppAdvanced() {
       setProcessStage('organizing');
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // レスポンスのContent-Typeをチェック
-      const contentType = response.headers.get('content-type');
-      console.log('[FETCH] Response Content-Type:', contentType);
-      
-      if (!contentType || !contentType.includes('application/json')) {
-        const textResponse = await response.text();
-        console.error('[FETCH] Non-JSON response received:', textResponse.substring(0, 500));
-        throw new Error('サーバーから無効なレスポンスが返されました。ソースコードが正しく貼り付けられているか、またはサーバーエラーが発生していないか確認してください。');
-      }
-
       // JSONパースエラーをキャッチ
       let data;
+      const contentType = response.headers.get('content-type');
+      console.log('[FETCH] Response Content-Type:', contentType);
+      console.log('[FETCH] Response status:', response.status);
+      
       try {
         data = await response.json();
       } catch (jsonError) {
         console.error('[FETCH] JSON parse error:', jsonError);
+        // Content-Typeをチェックして詳細なエラーメッセージを提供
+        if (!contentType || !contentType.includes('application/json')) {
+          console.error('[FETCH] Response was not JSON. Content-Type:', contentType);
+          throw new Error('サーバーから無効なレスポンスが返されました。ソースコードが正しく貼り付けられているか、またはサーバーエラーが発生していないか確認してください。ブラウザコンソール（F12）で詳細を確認してください。');
+        }
         throw new Error('サーバーから無効なJSON形式のレスポンスが返されました。ブラウザコンソールで詳細を確認してください。');
       }
 
@@ -838,15 +837,43 @@ function AppAdvanced() {
                     />
                     
                     {imageFiles.length > 0 && (
-                      <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px' }}>
-                        <strong style={{ color: '#2e7d32', fontSize: '15px' }}>
-                          ✅ {t('ocrUploadedLabel').replace('{count}', imageFiles.length.toString())}
-                        </strong>
-                        <ul style={{ marginTop: '12px', fontSize: '14px', paddingLeft: '24px', color: 'var(--apple-gray)' }}>
-                          {imageFiles.map((file, index) => (
-                            <li key={index}>{file.name} ({(file.size / 1024).toFixed(2)} KB)</li>
-                          ))}
-                        </ul>
+                      <div style={{ marginTop: '16px' }}>
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1, padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px' }}>
+                            <strong style={{ color: '#2e7d32', fontSize: '15px' }}>
+                              ✅ {t('ocrUploadedLabel').replace('{count}', imageFiles.length.toString())}
+                            </strong>
+                            <ul style={{ marginTop: '12px', fontSize: '14px', paddingLeft: '24px', color: 'var(--apple-gray)', marginBottom: 0 }}>
+                              {imageFiles.map((file, index) => (
+                                <li key={index}>{file.name} ({(file.size / 1024).toFixed(2)} KB)</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImageFiles([]);
+                              // ファイル入力もリセット
+                              const fileInput = document.getElementById('imageUpload') as HTMLInputElement;
+                              if (fileInput) fileInput.value = '';
+                              showSuccess(`🗑️ ${t('imagesDeleted')}`);
+                            }}
+                            className="button-apple"
+                            style={{
+                              padding: '12px 20px',
+                              backgroundColor: '#ff3b30',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            🗑️ {t('deleteButton')}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
