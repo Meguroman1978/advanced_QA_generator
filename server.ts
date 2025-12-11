@@ -846,7 +846,7 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
   }
 }
 
-async function generateQA(content: string, maxQA: number = 5, language: string = 'ja', productUrl?: string): Promise<Array<{question: string, answer: string}>> {
+async function generateQA(content: string, maxQA: number = 5, language: string = 'ja', productUrl?: string, isOCRMode: boolean = false): Promise<Array<{question: string, answer: string}>> {
   const apiKey = process.env.OPENAI_API_KEY;
   
   console.log('API Key check:', apiKey ? `Found (length: ${apiKey.length})` : 'NOT FOUND');
@@ -861,11 +861,19 @@ async function generateQA(content: string, maxQA: number = 5, language: string =
   });
 
   // コンテンツが少ない場合の対応
+  // OCRモードの場合は、文字数に関わらず「低品質」として扱う（ノイジーなデータ）
+  // URLモードの場合は、文字数で判定（extractContent()の出力は高品質）
   const isLowContent = content.length < 500;
-  const isVeryLowContent = content.length < 1000; // OCRなど
+  const isVeryLowContent = isOCRMode ? true : (content.length < 1000); // OCRモードは常にtrue
+  
+  console.log(`🔍 Content quality assessment:`);
+  console.log(`  - isOCRMode: ${isOCRMode}`);
+  console.log(`  - content.length: ${content.length}`);
+  console.log(`  - isVeryLowContent: ${isVeryLowContent} (${isOCRMode ? 'OCR mode - always true' : 'URL mode - based on length'})`);
+  
   const contentNote = isLowContent 
     ? `\n\n⚠️ 注意: ソーステキストが少ない場合でも、必ずソーステキストの情報のみを使用してください。外部情報や一般知識を追加しないでください。テキストから読み取れる情報を複数の角度から深掘りして${maxQA}個のQ&Aを作成してください。`
-    : isVeryLowContent
+    : isOCRMode
     ? `\n\n⚠️ 注意: OCRで抽出されたテキストの場合、完璧でないことがあります。読み取れる商品情報（商品名、価格、特徴など）から、可能な限り${maxQA}個に近いQ&Aを作成してください。最低でも${Math.floor(maxQA * 0.3)}個以上のQ&Aを生成してください。`
     : '';
 
@@ -1489,7 +1497,7 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
     
     let qaList: Array<{question: string, answer: string}> = [];
     try {
-      qaList = await generateQA(extractedContent, maxQA, language, effectiveUrl);
+      qaList = await generateQA(extractedContent, maxQA, language, effectiveUrl, false); // URL mode - high quality content
       console.log(`[GENERATION] Generated ${qaList.length} Q&A items`);
       console.log(`[GENERATION] Q&A generation completed successfully`);
       console.log(`[GENERATION] ============ GENERATED Q&As ============`);
@@ -2158,7 +2166,7 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
     
     let qaList: Array<{question: string, answer: string}> = [];
     try {
-      qaList = await generateQA(combinedText, maxQA, language, url);
+      qaList = await generateQA(combinedText, maxQA, language, url, true); // OCR mode - noisy data
       console.log(`✅ ${qaList.length}個のQ&Aを生成しました`);
       console.log('📊 Q&A生成結果の詳細:');
       console.log('  - 生成されたQ&A数:', qaList.length);
