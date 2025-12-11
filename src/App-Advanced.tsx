@@ -288,17 +288,24 @@ function AppAdvanced() {
       // 通常のモードまたはソースコード挿入モード
       const requestUrl = `${API_URL}/api/workflow`;
       const requestBody: any = { 
-        url: config.urls[0],
+        url: config.urls[0] || '',
         maxQA: config.maxQA,
-        language: language
+        language: language,
+        includeTypes: config.includeTypes // Q&A types configuration
       };
       
       // ソースコード挿入モードの場合
       if (useSourceCode && sourceCodeInput) {
         requestBody.sourceCode = sourceCodeInput;
+        console.log('[FETCH] Source code mode active, code length:', sourceCodeInput.length);
       } else if (config.sourceCode) {
         requestBody.sourceCode = config.sourceCode;
+        console.log('[FETCH] Legacy source code mode, code length:', config.sourceCode.length);
       }
+      
+      console.log('[FETCH] Has valid URL:', hasValidUrl, 'URL:', requestBody.url);
+      console.log('[FETCH] Has source code:', hasSourceCode);
+      console.log('[FETCH] Include Types:', requestBody.includeTypes);
       
       console.log('[FETCH] Request URL:', requestUrl);
       console.log('[FETCH] Request body:', requestBody);
@@ -352,6 +359,18 @@ function AppAdvanced() {
       setSessionId(Date.now().toString());
       setOriginalLanguage(language); // Q&A生成時の言語を記録
       setTranslatedVideoInfo(new Map()); // 翻訳情報をクリア
+      
+      // Check if no Q&A were generated and show helpful message
+      if (!data.data?.qaItems || data.data.qaItems.length === 0) {
+        console.warn('[WARNING] No Q&A items generated');
+        if (useImageOCR) {
+          setError('画像からQ&Aを生成できませんでした。画像に十分なテキスト情報が含まれているか確認してください。');
+        } else if (hasValidUrl) {
+          setError('URLからQ&Aを生成できませんでした。サイトがアクセス制限されている可能性があります。「クローラーアクセス禁止サイトを対象にする際の作業方法」をお試しください。');
+        } else {
+          setError('Q&Aを生成できませんでした。入力内容を確認してください。');
+        }
+      }
 
       // Stage 4: 完了
       setProcessStage('completed');
@@ -592,106 +611,6 @@ function AppAdvanced() {
             </div>
           </div>
 
-          {/* 画像OCRモード */}
-          {useImageOCR && (
-            <div className="form-section-apple image-ocr-section-apple" style={{
-              background: 'linear-gradient(135deg, #e3f2fd 0%, #e8f4f8 100%)',
-              border: '2px solid var(--apple-blue)',
-              padding: '24px',
-              borderRadius: '16px'
-            }}>
-              <h4 style={{ marginTop: 0, color: 'var(--apple-blue)', fontSize: '19px', fontWeight: '600' }}>
-                📷 {t('ocrModeTitle')}
-              </h4>
-              <p style={{ fontSize: '15px', marginBottom: '20px', lineHeight: '1.6', color: 'var(--apple-gray)' }}>
-                {t('ocrModeDescription')}<br/>
-                <strong>{t('ocrModeBenefit')}</strong>
-              </p>
-              
-              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#fff3e0', borderRadius: '12px', fontSize: '14px' }}>
-                <strong style={{ color: '#1d1d1f' }}>📸 {t('ocrScreenshotTitle')}</strong>
-                <ul style={{ marginTop: '8px', marginBottom: '0', paddingLeft: '24px', color: 'var(--apple-gray)' }}>
-                  <li>{t('ocrScreenshotMac')}</li>
-                  <li>{t('ocrScreenshotWindows')}</li>
-                  <li><strong>{t('ocrScreenshotRecommend')}</strong></li>
-                </ul>
-              </div>
-
-              <label htmlFor="imageUpload" style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: 'var(--apple-blue)', fontSize: '15px' }}>
-                📁 {t('ocrUploadLabel')}
-              </label>
-              <input
-                type="file"
-                id="imageUpload"
-                accept="image/*"
-                multiple
-                onChange={handleImageUpload}
-                style={{
-                  display: 'block',
-                  marginBottom: '16px',
-                  padding: '12px',
-                  border: '2px dashed var(--apple-blue)',
-                  borderRadius: '12px',
-                  width: '100%',
-                  cursor: 'pointer',
-                  backgroundColor: 'white'
-                }}
-              />
-              
-              {imageFiles.length > 0 && (
-                <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px' }}>
-                  <strong style={{ color: '#2e7d32', fontSize: '15px' }}>
-                    ✅ {t('ocrUploadedLabel').replace('{count}', imageFiles.length.toString())}
-                  </strong>
-                  <ul style={{ marginTop: '12px', fontSize: '14px', paddingLeft: '24px', color: 'var(--apple-gray)' }}>
-                    {imageFiles.map((file, index) => (
-                      <li key={index}>{file.name} ({(file.size / 1024).toFixed(2)} KB)</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ソースコード挿入モード */}
-          {useSourceCode && (
-            <div className="form-section-apple source-code-section-apple" style={{
-              background: 'linear-gradient(135deg, #fff3e0 0%, #fff8e1 100%)',
-              border: '2px solid #ff9500',
-              padding: '24px',
-              borderRadius: '16px'
-            }}>
-              <label htmlFor="sourceCode" style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: '#e65100', fontSize: '15px' }}>
-                📋 {t('sourceCodeModeTitle')}
-              </label>
-              <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: '#fff8e1', borderRadius: '12px', fontSize: '14px' }}>
-                <strong style={{ color: '#1d1d1f' }}>{t('sourceCodeModePasteInstructions')}</strong>
-              </div>
-              <textarea
-                id="sourceCode"
-                value={sourceCodeInput}
-                onChange={(e) => setSourceCodeInput(e.target.value)}
-                placeholder={t('sourceCodeModePlaceholder')}
-                style={{
-                  width: '100%',
-                  minHeight: '250px',
-                  padding: '16px',
-                  fontFamily: 'monospace',
-                  fontSize: '13px',
-                  borderRadius: '12px',
-                  border: sourceCodeInput ? '2px solid #4caf50' : '2px dashed #ff9500',
-                  backgroundColor: sourceCodeInput ? '#f1f8e9' : 'white',
-                  boxSizing: 'border-box'
-                }}
-              />
-              {sourceCodeInput && (
-                <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px', fontSize: '14px', color: '#2e7d32' }}>
-                  ✅ {t('sourceCodeModePasted').replace('{size}', (sourceCodeInput.length / 1024).toFixed(2))}
-                </div>
-              )}
-            </div>
-          )}
-
           <div className="form-section-apple">
             <h3 className="section-title-apple">🔗 {t('urlLabel')}</h3>
             
@@ -852,6 +771,109 @@ function AppAdvanced() {
                     <li>{t('botBypassExtensionStep5')}</li>
                   </ol>
                 </details>
+                
+                {/* 画像OCRモード - セクション内に表示 */}
+                {useImageOCR && (
+                  <div className="image-ocr-section-apple" style={{
+                    marginTop: '20px',
+                    background: 'linear-gradient(135deg, #e3f2fd 0%, #e8f4f8 100%)',
+                    border: '2px solid var(--apple-blue)',
+                    padding: '24px',
+                    borderRadius: '16px'
+                  }}>
+                    <h4 style={{ marginTop: 0, color: 'var(--apple-blue)', fontSize: '19px', fontWeight: '600' }}>
+                      📷 {t('ocrModeTitle')}
+                    </h4>
+                    <p style={{ fontSize: '15px', marginBottom: '20px', lineHeight: '1.6', color: 'var(--apple-gray)' }}>
+                      {t('ocrModeDescription')}<br/>
+                      <strong>{t('ocrModeBenefit')}</strong>
+                    </p>
+                    
+                    <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#fff3e0', borderRadius: '12px', fontSize: '14px' }}>
+                      <strong style={{ color: '#1d1d1f' }}>📸 {t('ocrScreenshotTitle')}</strong>
+                      <ul style={{ marginTop: '8px', marginBottom: '0', paddingLeft: '24px', color: 'var(--apple-gray)' }}>
+                        <li>{t('ocrScreenshotMac')}</li>
+                        <li>{t('ocrScreenshotWindows')}</li>
+                        <li><strong>{t('ocrScreenshotRecommend')}</strong></li>
+                      </ul>
+                    </div>
+
+                    <label htmlFor="imageUpload" style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: 'var(--apple-blue)', fontSize: '15px' }}>
+                      📁 {t('ocrUploadLabel')}
+                    </label>
+                    <input
+                      type="file"
+                      id="imageUpload"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageUpload}
+                      style={{
+                        display: 'block',
+                        marginBottom: '16px',
+                        padding: '12px',
+                        border: '2px dashed var(--apple-blue)',
+                        borderRadius: '12px',
+                        width: '100%',
+                        cursor: 'pointer',
+                        backgroundColor: 'white',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    
+                    {imageFiles.length > 0 && (
+                      <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px' }}>
+                        <strong style={{ color: '#2e7d32', fontSize: '15px' }}>
+                          ✅ {t('ocrUploadedLabel').replace('{count}', imageFiles.length.toString())}
+                        </strong>
+                        <ul style={{ marginTop: '12px', fontSize: '14px', paddingLeft: '24px', color: 'var(--apple-gray)' }}>
+                          {imageFiles.map((file, index) => (
+                            <li key={index}>{file.name} ({(file.size / 1024).toFixed(2)} KB)</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ソースコード挿入モード - セクション内に表示 */}
+                {useSourceCode && (
+                  <div className="source-code-section-apple" style={{
+                    marginTop: '20px',
+                    background: 'linear-gradient(135deg, #fff3e0 0%, #fff8e1 100%)',
+                    border: '2px solid #ff9500',
+                    padding: '24px',
+                    borderRadius: '16px'
+                  }}>
+                    <label htmlFor="sourceCode" style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: '#e65100', fontSize: '15px' }}>
+                      📋 {t('sourceCodeModeTitle')}
+                    </label>
+                    <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: '#fff8e1', borderRadius: '12px', fontSize: '14px' }}>
+                      <strong style={{ color: '#1d1d1f' }}>{t('sourceCodeModePasteInstructions')}</strong>
+                    </div>
+                    <textarea
+                      id="sourceCode"
+                      value={sourceCodeInput}
+                      onChange={(e) => setSourceCodeInput(e.target.value)}
+                      placeholder={t('sourceCodeModePlaceholder')}
+                      style={{
+                        width: '100%',
+                        minHeight: '250px',
+                        padding: '16px',
+                        fontFamily: 'monospace',
+                        fontSize: '13px',
+                        borderRadius: '12px',
+                        border: sourceCodeInput ? '2px solid #4caf50' : '2px dashed #ff9500',
+                        backgroundColor: sourceCodeInput ? '#f1f8e9' : 'white',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    {sourceCodeInput && (
+                      <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px', fontSize: '14px', color: '#2e7d32' }}>
+                        ✅ {t('sourceCodeModePasted').replace('{size}', (sourceCodeInput.length / 1024).toFixed(2))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
