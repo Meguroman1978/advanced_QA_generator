@@ -733,15 +733,16 @@ async function generateQA(content, maxQA = 5, language = 'ja', productUrl) {
     });
     // コンテンツが少ない場合の対応
     const isLowContent = content.length < 500;
+    const isVeryLowContent = content.length < 1000; // OCRなど
     const contentNote = isLowContent
         ? `\n\n⚠️ 注意: ソーステキストが少ない場合でも、必ずソーステキストの情報のみを使用してください。外部情報や一般知識を追加しないでください。テキストから読み取れる情報を複数の角度から深掘りして${maxQA}個のQ&Aを作成してください。`
-        : '';
+        : isVeryLowContent
+            ? `\n\n⚠️ 注意: OCRで抽出されたテキストの場合、完璧でないことがあります。読み取れる商品情報（商品名、価格、特徴など）から、可能な限り${maxQA}個に近いQ&Aを作成してください。最低でも${Math.floor(maxQA * 0.3)}個以上のQ&Aを生成してください。`
+            : '';
     const languagePrompts = {
-        ja: `🚫🚫🚫 絶対禁止事項 🚫🚫🚫
-以下の語句を含む質問は**絶対に作成してはいけません**:
-「店舗」「在庫」「購入」「配送」「送料」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認」「表示」「数分」「反映」「遅延」「リアルタイム」
+        ja: `${isVeryLowContent ? '' : '🚫🚫🚫 絶対禁止事項 🚫🚫🚫\n'}${isVeryLowContent ? '⚠️ 避けるべき語句:\n' : '以下の語句を含む質問は**絶対に作成してはいけません**:\n'}「店舗」「在庫」「購入」「配送」「送料」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認」「表示」「数分」「反映」「遅延」「リアルタイム」
 
-これらの語句が含まれる質問を1つでも作成した場合、タスクは完全に失敗します。
+${isVeryLowContent ? 'これらの語句を含む質問は避けてください。ただし、商品情報が読み取れる場合は、商品に関するQ&Aを優先してください。' : 'これらの語句が含まれる質問を1つでも作成した場合、タスクは完全に失敗します。'}
 
 🎯 【最重要ミッション】
 あなたの唯一の仕事は「**商品の物理的な特徴**」についてのQ&Aを作成することです。
@@ -832,21 +833,20 @@ A2: [日本語の詳細な回答 - ソーステキストの情報のみ]
 ${content}
 
 【最重要】
-- **可能な限り${maxQA}個に近いQ&Aを日本語で生成してください**（最低でも${Math.floor(maxQA * 0.5)}個以上）
+- **可能な限り${maxQA}個に近いQ&Aを日本語で生成してください**（最低でも${isVeryLowContent ? Math.floor(maxQA * 0.3) : Math.floor(maxQA * 0.5)}個以上）
 - すべての回答はソーステキストに記載されている情報のみを使用してください
 - ソーステキストに記載されていない商品や情報については一切言及しないでください
 - **情報が限られている場合でも、既存の情報から異なる角度や視点で質問を生成してください**
+- OCRテキストの場合、不完全な文字でも推測せずに、読み取れる部分のみを使用してください
 
 【生成後の最終確認 - 必須】
 生成したすべてのQ&Aを再度チェックし、以下の語句が含まれる質問は**すべて削除**してください:
 「店舗」「在庫」「購入」「配送」「送料」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認」「表示」「反映」「遅延」「リアルタイム」「数分」
 
 削除後、残ったQ&Aのみを出力してください。`,
-        en: `🚫🚫🚫 ABSOLUTELY FORBIDDEN 🚫🚫🚫
-You MUST NOT create questions containing ANY of these words:
-"store" "inventory" "stock" "purchase" "buy" "shipping" "delivery" "fee" "points" "member" "return" "exchange" "warranty" "review" "comment" "contact" "register" "login" "payment" "checkout" "restock" "check" "confirm" "display" "real-time" "reflect" "delay" "minutes"
+        en: `${isVeryLowContent ? '' : '🚫🚫🚫 ABSOLUTELY FORBIDDEN 🚫🚫🚫\n'}${isVeryLowContent ? '⚠️ Words to avoid:\n' : 'You MUST NOT create questions containing ANY of these words:\n'}"store" "inventory" "stock" "purchase" "buy" "shipping" "delivery" "fee" "points" "member" "return" "exchange" "warranty" "review" "comment" "contact" "register" "login" "payment" "checkout" "restock" "check" "confirm" "display" "real-time" "reflect" "delay" "minutes"
 
-If you create even ONE question with these words, the task is COMPLETELY FAILED.
+${isVeryLowContent ? 'Avoid questions with these words, but prioritize product-related Q&As if product information is readable.' : 'If you create even ONE question with these words, the task is COMPLETELY FAILED.'}
 
 🎯 【PRIMARY MISSION】
 Your ONLY job is to create Q&As about **THE PRODUCT'S PHYSICAL FEATURES**:
@@ -936,10 +936,11 @@ A2: [Detailed English answer - source text only]
 ${content}
 
 【CRITICAL】
-- **Generate as close to ${maxQA} Q&A pairs as possible** (minimum ${Math.floor(maxQA * 0.5)}+)
+- **Generate as close to ${maxQA} Q&A pairs as possible** (minimum ${isVeryLowContent ? Math.floor(maxQA * 0.3) : Math.floor(maxQA * 0.5)}+)
 - All answers must use ONLY information stated in the source text
 - Do NOT mention any products not listed in the source text
 - **Even with limited information, create questions from different angles and perspectives**
+- For OCR text, use only readable parts without guessing incomplete characters
 
 【FINAL VERIFICATION - MANDATORY】
 After generating all Q&As, CHECK AGAIN and DELETE ALL questions containing these terms:
@@ -999,10 +1000,11 @@ A2: [详细的中文答案]
 ${content}
 
 【最重要】
-- **尽可能生成接近${maxQA}个的问答对**（最少${Math.floor(maxQA * 0.5)}个以上）
+- **尽可能生成接近${maxQA}个的问答对**（最少${isVeryLowContent ? Math.floor(maxQA * 0.3) : Math.floor(maxQA * 0.5)}个以上）
 - 所有答案必须仅使用源文本中说明的信息
 - 不要提及源文本中未列出的任何产品
 - **即使信息有限，也要从不同角度和视角创建问题**
+- 对于OCR文本，只使用可读部分，不要猜测不完整的字符
 
 【最终验证 - 必须】
 生成所有问答后，再次检查并删除包含以下术语的**所有问题**：
@@ -1878,11 +1880,43 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
             console.warn(`⚠️ WARNING: OCR extracted text is quite short (${combinedText.length} chars), Q&A generation might be limited`);
             console.log(`📄 Full OCR text: ${combinedText}`);
         }
+        // OCRテキストに製品情報が含まれているかを判定
+        const hasProductInfo = (text) => {
+            // 製品情報によく含まれるキーワード（日本語）
+            const productKeywords = [
+                '価格', '円', '¥', '$', 'JPY', 'USD',
+                '素材', '材質', 'サイズ', 'cm', 'mm', 'g', 'kg',
+                '色', 'カラー', '商品', '製品', 'モデル', '型番',
+                '仕様', 'スペック', '機能', '特徴', '説明',
+                'price', 'material', 'size', 'color', 'product', 'model', 'specification'
+            ];
+            // UI/ナビゲーション要素を示すキーワード
+            const uiKeywords = [
+                'ログイン', 'login', 'お気に入り', 'カート', 'cart',
+                'ゲスト', 'guest', 'メニュー', 'menu', 'ナビ', 'navigation',
+                'ヘッダー', 'header', 'フッター', 'footer'
+            ];
+            const lowercaseText = text.toLowerCase();
+            const productCount = productKeywords.filter(kw => lowercaseText.includes(kw.toLowerCase())).length;
+            const uiCount = uiKeywords.filter(kw => lowercaseText.includes(kw.toLowerCase())).length;
+            // 製品キーワードが2個以上あり、UIキーワードよりも多い場合は製品情報あり
+            return productCount >= 2 && productCount > uiCount;
+        };
+        const hasProduct = hasProductInfo(combinedText);
+        console.log('  - Has product info detected:', hasProduct);
+        console.log('  - Text analysis: manufacturing=', combinedText.match(/(価格|円|サイズ|素材|色|商品)/g)?.length || 0);
+        console.log('  - Text analysis: UI elements=', combinedText.match(/(ログイン|カート|メニュー|ゲスト|ナビ)/g)?.length || 0);
         // Q&A生成（リクエストからmaxQAとlanguageを取得）
-        const maxQA = req.body.maxQA ? parseInt(req.body.maxQA, 10) : 40;
+        let maxQA = req.body.maxQA ? parseInt(req.body.maxQA, 10) : 40;
         const language = req.body.language || 'ja';
+        // 製品情報が検出されない場合、maxQAを大幅に削減（3個のみ）
+        if (!hasProduct && combinedText.length < 2000) {
+            console.warn(`⚠️ CRITICAL WARNING: OCR text appears to be mostly UI elements, not product info!`);
+            console.warn(`  Reducing maxQA from ${maxQA} to 3 to avoid generating irrelevant Q&As`);
+            maxQA = Math.min(maxQA, 3);
+        }
         console.log('\n🤖 Q&A生成を開始...');
-        console.log('  - maxQA:', maxQA);
+        console.log('  - maxQA (adjusted):', maxQA);
         console.log('  - language:', language);
         console.log('  - Combined text length:', combinedText.length, 'characters');
         console.log('  - Text preview:', combinedText.substring(0, 200));
