@@ -1585,6 +1585,7 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
     const openai = new OpenAI({ apiKey });
 
     // qaItemsを生成（動画推奨情報を含む）
+    // source: 'collected' → フロントエンドで「サイト情報」ラベル表示
     const qaItems = await Promise.all(qaList.map(async (qa, index) => {
       const needsVideo = needsVideoExplanation(qa.question, qa.answer);
       console.error(`DEBUG Q${index + 1} needsVideo: ${needsVideo} - Q: ${qa.question.substring(0, 50)}`);
@@ -1593,7 +1594,7 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
         id: `${Date.now()}-${index}`,
         question: qa.question,
         answer: qa.answer,
-        source: 'collected' as const,
+        source: 'collected' as const,  // URLから抽出 → 「サイト情報」ラベル
         sourceType: 'text' as const,
         url: url, // 元のURLを追加
         timestamp: Date.now(),
@@ -2244,6 +2245,8 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
     };
 
     // レスポンス（必要なフィールドを全て含める）
+    // 重要: OCR画像から抽出したテキストは「サイト情報」として扱う
+    // source: 'collected' → フロントエンドで「サイト情報」ラベル表示
     res.json({
       success: true,
       data: {
@@ -2256,7 +2259,7 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
             id: String(index + 1),
             question: qa.question,
             answer: qa.answer,
-            source: '収集した情報から生成',
+            source: 'collected' as const,  // OCR画像内のテキストも「サイト情報」として扱う
             sourceType: 'image-ocr',
             url: url || 'ocr-images',
             needsVideo: needsVideo,
