@@ -18,6 +18,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const app = express();
+// Fly.io uses PORT=8080 internally, fallback to 3001 for local development
 const port = parseInt(process.env.PORT || '3001', 10);
 app.use(cors());
 app.use(express.json());
@@ -1534,10 +1535,12 @@ app.get(/^(?!\/api).*$/, (req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
 });
 const server = app.listen(port, '0.0.0.0', () => {
-    console.log(`Server is running on http://0.0.0.0:${port}`);
+    console.log(`✅ Server is running on http://0.0.0.0:${port}`);
+    console.log(`✅ Listening on all interfaces (0.0.0.0:${port})`);
     console.log('Environment:', process.env.NODE_ENV);
     console.log('Dist path:', distPath);
     console.log('API Key configured:', !!process.env.OPENAI_API_KEY);
+    console.log(`🚀 Ready to accept connections from Fly.io proxy`);
 });
 // タイムアウト設定を延長（Playwright処理のため）
 server.timeout = 300000; // 5分
