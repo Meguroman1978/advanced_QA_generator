@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './App.css';
+import { TestOCRButton } from './test-component';
 
 interface WorkflowResult {
   url: string;
@@ -24,8 +25,8 @@ function App() {
   const [includeVideoInfo, setIncludeVideoInfo] = useState(false);
   const [useSourceCode, setUseSourceCode] = useState(false);
   const [sourceCodeInput, setSourceCodeInput] = useState('');
-  const [useImageOCR, setUseImageOCR] = useState(false);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [useImageOCR, setUseImageOCR] = useState(false); // Image OCR mode state
+  const [imageFiles, setImageFiles] = useState<File[]>([]); // Uploaded images
 
   // API URLを環境に応じて設定
   // VITE_API_URLが設定されている場合はそれを使用
@@ -363,6 +364,7 @@ function App() {
               >
                 {useImageOCR ? '✅ 画像OCRモード' : '📷 画像OCRモード'}
               </button>
+              <TestOCRButton />
             </div>
             <details style={{ fontSize: '13px', cursor: 'pointer' }}>
               <summary style={{ fontWeight: 'bold', marginBottom: '5px' }}>拡張機能のインストール方法を表示</summary>
