@@ -614,3 +614,4 @@ HTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコ�
 }
 
 export default App;
+// Force rebuild Thu Dec 11 01:46:32 UTC 2025
