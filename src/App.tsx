@@ -24,6 +24,8 @@ function App() {
   const [includeVideoInfo, setIncludeVideoInfo] = useState(false);
   const [useSourceCode, setUseSourceCode] = useState(false);
   const [sourceCodeInput, setSourceCodeInput] = useState('');
+  const [useImageOCR, setUseImageOCR] = useState(false);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
 
   // API URLを環境に応じて設定
   // VITE_API_URLが設定されている場合はそれを使用
@@ -41,6 +43,13 @@ function App() {
   };
   const API_URL = getApiUrl();
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setImageFiles(files);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -50,6 +59,40 @@ function App() {
     try {
       console.log('Sending request to:', `${API_URL}/api/workflow`);
       
+      // 画像OCRモードの場合
+      if (useImageOCR && imageFiles.length > 0) {
+        const formData = new FormData();
+        formData.append('url', url);
+        imageFiles.forEach((file, index) => {
+          formData.append(`image${index}`, file);
+        });
+        
+        const response = await fetch(`${API_URL}/api/workflow-ocr`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        console.log('Response status:', response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error response:', errorText);
+          throw new Error(`Server error: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log('OCR Response data:', data);
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to process OCR workflow');
+        }
+
+        setResult(data.data);
+        console.log('Result set with qaItems:', data.data?.qaItems?.length, 'items');
+        return;
+      }
+      
+      // 通常のモード
       const requestBody = useSourceCode && sourceCodeInput
         ? { url, sourceCode: sourceCodeInput }
         : { url };
@@ -281,10 +324,13 @@ function App() {
               <li>オレンジ色のテキストエリアに<strong>貼り付け（Cmd+V）</strong></li>
               <li>URLを入力して「Q&Aを生成」をクリック</li>
             </ol>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                onClick={() => setUseSourceCode(!useSourceCode)}
+                onClick={() => {
+                  setUseSourceCode(!useSourceCode);
+                  setUseImageOCR(false);
+                }}
                 style={{
                   padding: '10px 20px',
                   backgroundColor: useSourceCode ? '#ff9800' : '#4caf50',
@@ -296,7 +342,26 @@ function App() {
                   fontWeight: 'bold'
                 }}
               >
-                {useSourceCode ? '✅ ソースコード挿入モード（有効）' : '📝 ソースコード挿入を有効化'}
+                {useSourceCode ? '✅ ソースコード挿入モード' : '📝 ソースコード挿入'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUseImageOCR(!useImageOCR);
+                  setUseSourceCode(false);
+                }}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: useImageOCR ? '#2196f3' : '#757575',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                {useImageOCR ? '✅ 画像OCRモード' : '📷 画像OCRモード'}
               </button>
             </div>
             <details style={{ fontSize: '13px', cursor: 'pointer' }}>
@@ -310,6 +375,63 @@ function App() {
               </ol>
             </details>
           </div>
+
+          {useImageOCR && (
+            <div className="image-ocr-section" style={{
+              marginBottom: '20px',
+              padding: '15px',
+              backgroundColor: '#e3f2fd',
+              borderRadius: '8px',
+              border: '2px solid #2196f3'
+            }}>
+              <h4 style={{ marginTop: 0, color: '#1565c0' }}>📷 画像OCRモード（100%確実）</h4>
+              <p style={{ fontSize: '14px', marginBottom: '15px', lineHeight: '1.6' }}>
+                ページの<strong>スクリーンショット</strong>をアップロードしてください。<br/>
+                OCR技術で画像内のテキストを自動抽出してQ&Aを生成します。<br/>
+                <strong>メリット:</strong> ボット検知を完全回避、ログイン後のページにも対応
+              </p>
+              
+              <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#fff3e0', borderRadius: '4px', fontSize: '13px' }}>
+                <strong>📸 スクリーンショットの撮り方:</strong>
+                <ul style={{ marginTop: '5px', marginBottom: '5px', paddingLeft: '20px' }}>
+                  <li><strong>Mac:</strong> Cmd + Shift + 4 （範囲選択）または Cmd + Shift + 3 （全画面）</li>
+                  <li><strong>Windows:</strong> Windows + Shift + S （範囲選択）または PrintScreen （全画面）</li>
+                  <li><strong>推奨:</strong> ページ全体をスクロールして複数枚撮影（最大10枚まで）</li>
+                </ul>
+              </div>
+
+              <label htmlFor="imageUpload" style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: '#1565c0' }}>
+                📁 画像ファイルをアップロード（PNG, JPEG, 最大10枚）:
+              </label>
+              <input
+                type="file"
+                id="imageUpload"
+                accept="image/*"
+                multiple
+                onChange={handleImageUpload}
+                style={{
+                  display: 'block',
+                  marginBottom: '10px',
+                  padding: '10px',
+                  border: '2px dashed #2196f3',
+                  borderRadius: '4px',
+                  width: '100%',
+                  cursor: 'pointer'
+                }}
+              />
+              
+              {imageFiles.length > 0 && (
+                <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '4px' }}>
+                  <strong style={{ color: '#2e7d32' }}>✅ アップロード済み: {imageFiles.length}枚</strong>
+                  <ul style={{ marginTop: '10px', fontSize: '13px', paddingLeft: '20px' }}>
+                    {imageFiles.map((file, index) => (
+                      <li key={index}>{file.name} ({(file.size / 1024).toFixed(2)} KB)</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           {useSourceCode && (
             <div className="source-code-section" style={{

@@ -11,6 +11,8 @@ import { dirname } from 'path';
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import { chromium } from 'playwright-core';
+import multer from 'multer';
+import Tesseract from 'tesseract.js';
 
 dotenv.config();
 
@@ -23,6 +25,19 @@ const port = parseInt(process.env.PORT || '3001', 10);
 
 app.use(cors());
 app.use(express.json());
+
+// Multer設定（画像アップロード用）
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB制限
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('画像ファイルのみアップロード可能です'));
+    }
+  }
+});
 
 // 静的ファイルのパスを定義（後で使用）
 const distPath = path.join(process.cwd(), 'dist');
@@ -647,6 +662,27 @@ function extractContent(html: string): string {
 }
 
 // OpenAI APIを使用して複数のQ&Aを生成
+// OCRで画像からテキストを抽出
+async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
+  console.log(`🔍 OCR処理開始: ${imageBuffer.length} bytes`);
+  
+  try {
+    const result = await Tesseract.recognize(imageBuffer, 'jpn+eng', {
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          console.log(`OCR進捗: ${(m.progress * 100).toFixed(1)}%`);
+        }
+      }
+    });
+    
+    console.log(`✅ OCR完了: ${result.data.text.length} 文字抽出`);
+    return result.data.text;
+  } catch (error) {
+    console.error('❌ OCR処理エラー:', error);
+    throw new Error(`OCR処理に失敗しました: ${error}`);
+  }
+}
+
 async function generateQA(content: string, maxQA: number = 5, language: string = 'ja', productUrl?: string): Promise<Array<{question: string, answer: string}>> {
   const apiKey = process.env.OPENAI_API_KEY;
   
@@ -1599,6 +1635,99 @@ app.get('/api/test-font', (req: Request, res: Response) => {
   doc.fontSize(14).text('这是中文文本。');
   
   doc.end();
+});
+
+// OCRワークフローエンドポイント
+app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, res: Response) => {
+  console.log('=== OCR Workflow Request Started ===');
+  
+  try {
+    const url = req.body.url || '';
+    const files = req.files as Express.Multer.File[];
+    
+    console.log('  - URL:', url);
+    console.log('  - Uploaded files:', files?.length || 0);
+    
+    if (!files || files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: '画像ファイルがアップロードされていません'
+      });
+    }
+    
+    // 各画像からOCRでテキスト抽出
+    console.log(`📸 ${files.length}枚の画像からテキスト抽出を開始...`);
+    const extractedTexts: string[] = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log(`\n画像 ${i + 1}/${files.length}: ${file.originalname} (${(file.size / 1024).toFixed(2)} KB)`);
+      
+      try {
+        const text = await extractTextFromImage(file.buffer);
+        extractedTexts.push(text);
+        console.log(`  → 抽出されたテキスト長: ${text.length} 文字`);
+        console.log(`  → プレビュー: ${text.substring(0, 100)}...`);
+      } catch (error) {
+        console.error(`  ❌ 画像 ${i + 1} の処理エラー:`, error);
+        // エラーが出ても他の画像の処理は続行
+      }
+    }
+    
+    // 抽出されたテキストを結合
+    const combinedText = extractedTexts.join('\n\n--- 次のページ ---\n\n');
+    console.log(`\n📝 結合後のテキスト長: ${combinedText.length} 文字`);
+    
+    if (combinedText.length < 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'テキストの抽出に失敗しました。画像が不鮮明な可能性があります。',
+        data: {
+          diagnostics: {
+            extractedTextLength: combinedText.length,
+            filesProcessed: files.length,
+            extractedText: combinedText
+          }
+        }
+      });
+    }
+    
+    // Q&A生成
+    console.log('\n🤖 Q&A生成を開始...');
+    const maxQA = 5;
+    const language = 'ja';
+    const qaList = await generateQA(combinedText, maxQA, language, url);
+    console.log(`✅ ${qaList.length}個のQ&Aを生成しました`);
+    
+    // レスポンス
+    res.json({
+      success: true,
+      data: {
+        url: url,
+        extractedContent: combinedText.substring(0, 500) + '...',
+        qaResult: qaList.map((qa, i) => `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`).join('\n\n'),
+        qaItems: qaList.map((qa, index) => ({
+          id: String(index + 1),
+          question: qa.question,
+          answer: qa.answer
+        })),
+        robotsAllowed: true,
+        stats: {
+          totalPages: 1,
+          imagesProcessed: files.length,
+          textExtracted: combinedText.length
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ OCR Workflow error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error',
+      details: error instanceof Error ? error.stack : undefined
+    });
+  }
 });
 
 // 静的ファイルを提供（APIルートの後に配置）
