@@ -40,7 +40,7 @@ COPY package*.json ./
 # Install dependencies (including devDependencies for build)
 RUN npm ci --include=dev
 
-# Copy source code
+# Copy source code (including pre-built dist folder)
 COPY . .
 
 # Ensure fonts directory exists and has correct permissions
@@ -48,8 +48,14 @@ RUN mkdir -p /app/fonts && \
     chmod 755 /app/fonts && \
     ls -la /app/fonts/
 
-# Build the application
-RUN npm run build
+# Build only the server (client is pre-built and committed)
+RUN npx tsc --project tsconfig.server.json
+
+# Verify dist folder exists with built files
+RUN echo "Verifying pre-built dist folder..." && \
+    ls -la dist/ && \
+    ls -la dist/assets/ && \
+    echo "✅ Pre-built dist folder verified"
 
 # Expose port
 EXPOSE 3000
