@@ -327,36 +327,54 @@ function AppAdvanced() {
       setProcessStage('organizing');
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // JSONパースエラーをキャッチ
-      let data;
+      // レスポンスの詳細ログ
       const contentType = response.headers.get('content-type');
       console.log('[FETCH] Response Content-Type:', contentType);
       console.log('[FETCH] Response status:', response.status);
+      console.log('[FETCH] Response ok:', response.ok);
+      console.log('[FETCH] Response headers:', {
+        contentType: response.headers.get('content-type'),
+        contentLength: response.headers.get('content-length'),
+        server: response.headers.get('server')
+      });
       
+      // まずレスポンステキストを取得
       let responseText = '';
       try {
-        data = await response.json();
+        responseText = await response.text();
+        console.log('[FETCH] Response text length:', responseText.length);
+        console.log('[FETCH] Response text preview:', responseText.substring(0, 500));
+      } catch (textError) {
+        console.error('[FETCH] Failed to read response text:', textError);
+        throw new Error('サーバーからのレスポンスを読み取れませんでした。ネットワーク接続を確認してください。');
+      }
+      
+      // レスポンステキストをJSONとしてパース
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('[FETCH] Successfully parsed JSON:', data);
       } catch (jsonError) {
         console.error('[FETCH] JSON parse error:', jsonError);
-        // エラー時にテキストを取得
-        try {
-          const responseClone = response.clone();
-          responseText = await responseClone.text();
-          console.error('[FETCH] Response text:', responseText.substring(0, 500));
-        } catch (textError) {
-          console.error('[FETCH] Could not read response text:', textError);
+        console.error('[FETCH] Full response text:', responseText);
+        
+        // Content-Typeをチェック
+        if (!contentType || !contentType.includes('application/json')) {
+          console.error('[FETCH] Response Content-Type is not JSON:', contentType);
+          
+          // HTMLエラーページの可能性
+          if (contentType && contentType.includes('text/html')) {
+            console.error('[FETCH] Server returned HTML error page');
+            // HTMLから<title>タグを抽出して表示
+            const titleMatch = responseText.match(/<title[^>]*>([^<]+)<\/title>/i);
+            const title = titleMatch ? titleMatch[1] : 'Unknown Error';
+            throw new Error(`サーバーエラー: ${title}\n\nソースコードの内容が正しいか確認してください。\n\nエラー詳細:\n- Content-Type: ${contentType}\n- Status: ${response.status}\n\nブラウザコンソール（F12）で完全なエラー内容を確認してください。`);
+          }
+          
+          throw new Error(`サーバーから無効なレスポンスが返されました。\n\nContent-Type: ${contentType}\nStatus: ${response.status}\n\nレスポンス内容: ${responseText.substring(0, 200)}...\n\nブラウザコンソール（F12）で詳細を確認してください。`);
         }
-        // Content-Typeをチェックして詳細なエラーメッセージを提供（エラーレスポンスも許容）
-        if (!contentType || (!contentType.includes('application/json') && !contentType.includes('text/html'))) {
-          console.error('[FETCH] Response was not JSON or HTML. Content-Type:', contentType);
-          throw new Error('サーバーから無効なレスポンスが返されました。ソースコードが正しく貼り付けられているか、またはサーバーエラーが発生していないか確認してください。ブラウザコンソール（F12）で詳細を確認してください。');
-        }
-        // HTMLの場合はサーバーエラーページの可能性
-        if (contentType && contentType.includes('text/html')) {
-          console.error('[FETCH] Server returned HTML (likely error page)');
-          throw new Error('サーバーがエラーページを返しました。入力内容を確認してください。ブラウザコンソール（F12）で詳細を確認してください。');
-        }
-        throw new Error('サーバーから無効なJSON形式のレスポンスが返されました。ブラウザコンソールで詳細を確認してください。');
+        
+        throw new Error(`JSONパースエラー: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}\n\nレスポンス内容: ${responseText.substring(0, 200)}...`);
       }
 
       if (!response.ok || !data.success) {

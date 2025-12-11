@@ -519,26 +519,67 @@ function extractContent(html: string): string {
   const pageTitle = $('title').text();
   console.log(`📌 Page title: ${pageTitle}`);
   
-  // 【ステップ1】ノイズとなる要素を徹底的に削除
-  $('script, style, noscript, iframe, svg, link').remove();
-  $('nav, header, footer').remove(); // ナビゲーション、ヘッダー、フッター
-  $('[class*="footer"], [id*="footer"]').remove(); // フッター（より徹底的）
-  $('[class*="header"], [id*="header"]').remove(); // ヘッダー（より徹底的）
-  $('[class*="cookie"], [id*="cookie"]').remove(); // クッキー通知
-  $('[class*="sidebar"], [class*="side-bar"], aside').remove(); // サイドバー
-  $('[class*="menu"], [class*="navigation"], [role="navigation"]').remove(); // メニュー
-  $('[class*="breadcrumb"]').remove(); // パンくずリスト
-  $('[class*="share"], [class*="social"]').remove(); // SNSシェアボタン
-  $('[class*="related"], [class*="recommend"], [class*="suggestion"]').remove(); // 関連商品
-  $('[class*="comment"], [class*="review"], [class*="rating"]').remove(); // レビュー欄
-  $('[class*="banner"], [class*="ad"], [class*="advertisement"]').remove(); // 広告
-  $('[class*="newsletter"], [class*="subscribe"]').remove(); // メルマガ購読
-  $('[class*="policy"], [class*="terms"], [class*="privacy"]').remove(); // ポリシー、規約
-  $('[class*="sitemap"], [class*="company"], [class*="corporate"]').remove(); // サイトマップ、会社情報
-  $('[class*="help"], [class*="faq"], [class*="guide"]').not('[class*="product"]').remove(); // ヘルプ（商品以外）
-  $('[class*="contact"], [class*="support"]').remove(); // お問い合わせ、サポート
-  $('[class*="account"], [class*="login"], [class*="register"]').remove(); // アカウント関連
-  $('form').not('[class*="product"], [class*="cart"]').remove(); // フォーム（商品・カート以外）
+  // 【ステップ1】ノイズとなる要素を徹底的に削除（商品情報以外を全て除外）
+  
+  // A. スクリプト・スタイル・メタ情報
+  $('script, style, noscript, iframe, svg, link, meta').remove();
+  
+  // B. ナビゲーション・ヘッダー・フッター
+  $('nav, header, footer').remove();
+  $('[class*="footer"], [id*="footer"]').remove();
+  $('[class*="header"], [id*="header"]').remove();
+  $('[class*="navigation"], [class*="nav"], [role="navigation"]').remove();
+  $('[class*="menu"]').remove();
+  $('[class*="breadcrumb"], [class*="bread-crumb"]').remove();
+  
+  // C. サイドバー・広告・バナー
+  $('[class*="sidebar"], [class*="side-bar"], [class*="aside"], aside').remove();
+  $('[class*="banner"], [class*="ad"], [class*="advertisement"], [class*="promo"]').remove();
+  
+  // D. SNS・シェア・コミュニティ機能
+  $('[class*="share"], [class*="social"], [class*="sns"]').remove();
+  $('[class*="comment"], [class*="review"], [class*="rating"]').remove();
+  $('[class*="like"], [class*="favorite"], [class*="bookmark"]').remove();
+  
+  // E. サイトポリシー・会社情報
+  $('[class*="policy"], [class*="terms"], [class*="privacy"]').remove();
+  $('[class*="sitemap"], [class*="site-map"]').remove();
+  $('[class*="company"], [class*="corporate"], [class*="about"]').remove();
+  $('[class*="copyright"]').remove();
+  
+  // F. ヘルプ・サポート・お問い合わせ
+  $('[class*="help"], [class*="faq"], [class*="guide"]').not('[class*="product"], [class*="usage"]').remove();
+  $('[class*="contact"], [class*="support"], [class*="inquiry"]').remove();
+  $('[class*="customer"], [class*="service"]').not('[class*="product"]').remove();
+  
+  // G. アカウント・会員・ログイン関連
+  $('[class*="account"], [class*="login"], [class*="register"], [class*="signup"], [class*="signin"]').remove();
+  $('[class*="member"], [class*="mypage"], [class*="profile"]').remove();
+  
+  // H. 購入・決済・配送関連（商品ページの購入ボタン以外）
+  $('[class*="checkout"], [class*="payment"]').not('[class*="product"]').remove();
+  $('[class*="shipping"], [class*="delivery"]').not('[class*="product"]').remove();
+  $('[class*="store"], [class*="shop"]').not('[class*="product"]').remove();
+  
+  // I. ポイント・キャンペーン・特典
+  $('[class*="point"], [class*="reward"], [class*="benefit"]').not('[class*="product"]').remove();
+  $('[class*="campaign"], [class*="sale"], [class*="event"]').not('[class*="product"]').remove();
+  $('[class*="coupon"], [class*="discount"]').not('[class*="product"]').remove();
+  
+  // J. その他の推奨・関連コンテンツ
+  $('[class*="related"], [class*="recommend"], [class*="suggestion"]').remove();
+  $('[class*="popular"], [class*="trending"], [class*="ranking"]').remove();
+  $('[class*="recently"], [class*="history"]').remove();
+  
+  // K. クッキー・通知・モーダル
+  $('[class*="cookie"], [id*="cookie"]').remove();
+  $('[class*="modal"], [class*="popup"], [class*="overlay"]').not('[class*="product"]').remove();
+  $('[class*="notification"], [class*="alert"], [class*="message"]').not('[class*="product"]').remove();
+  $('[class*="newsletter"], [class*="subscribe"]').remove();
+  
+  // L. フォーム（商品関連以外）
+  $('form').not('[class*="product"], [class*="cart"], [class*="wishlist"]').remove();
+  $('input, select, textarea, button').not('[class*="product"], [class*="quantity"], [class*="size"], [class*="color"]').remove();
   
   // 【ステップ2】商品情報が含まれるメインコンテナを特定（最も重要）
   const mainContentSelectors = [
@@ -712,38 +753,74 @@ async function generateQA(content: string, maxQA: number = 5, language: string =
     : '';
 
   const languagePrompts: Record<string, string> = {
-    ja: `あなたは日本語のQ&A作成専門家です。以下のテキストから、日本語で正確に${maxQA}個のQ&Aを作成してください。
+    ja: `あなたは商品専門のQ&A作成エキスパートです。以下のソーステキストから、このページで紹介されている**メイン商品のみ**について、日本語で${maxQA}個のQ&Aを作成してください。
+
+🎯 【最重要ミッション】
+あなたの唯一の仕事は「**このページで販売されているメイン商品そのもの**」についてのQ&Aを作成することです。
+サイトの使い方、購入手順、会員サービス、配送情報などは**完全に無視**してください。
 
 【絶対守るべきルール】
 1. ✅ 言語: 質問と回答は100%日本語で書くこと（英語禁止）
 2. ✅ 数量: 必ず${maxQA}個の異なるQ&Aを生成すること
 3. ✅ 品質: 各Q&Aは完全にユニークで、異なる角度からの質問であること
 4. ❌ 重複禁止: 同じまたは類似した質問を繰り返さないこと
-5. 🚫 【最重要】このウェブページで販売・紹介されている商品についてのみQ&Aを作成すること
-   - ソーステキストに書かれている情報のみを使用すること
-   - 外部の知識や一般常識を追加しないこと
-   - ソーステキストに記載されていない他の商品について言及しないこと
-   - ページ下部の会社情報・連絡先・フッター情報は無視すること
-   - サイトポリシー、プライバシーポリシー、利用規約などは無視すること
+5. 🎯 【絶対厳守】**メイン商品そのもの**についてのみQ&Aを作成すること
+   - 商品の物理的特徴（デザイン、色、素材、サイズ、重さ）
+   - 商品の機能・性能・スペック
+   - 商品の使い方・お手入れ方法
+   - 商品の価格・モデル番号・バリエーション
+   - ソーステキストに明記された商品固有の情報のみ使用
+   
+6. 🚫 【完全禁止】以下の内容は**1つも含めてはいけません**:
+   ❌ サイトの機能: 「購入方法」「支払い方法」「会員登録」「ログイン」
+   ❌ 配送・物流: 「配送料」「配送方法」「お届け日数」「配送先変更」
+   ❌ 店舗情報: 「実店舗の在庫」「店舗の場所」「営業時間」「他店舗」
+   ❌ ポイント・特典: 「ポイント付与」「クーポン使用」「キャンペーン」
+   ❌ アフターサービス: 「返品方法」「交換方法」「保証内容」「修理」
+   ❌ レビュー・コミュニティ: 「レビューの書き方」「口コミ投稿」
+   ❌ 会社・サイト情報: 「運営会社」「お問い合わせ」「プライバシーポリシー」
+   ❌ 在庫・入荷: 「入荷予定」「再入荷通知」「在庫状況の確認方法」（商品ページに明記された在庫情報は可）
 
-【Q&A作成の視点】（**商品固有の情報に100%フォーカス**）
-✅ **必ず含めるべき内容**:
-- この商品の正式名称、型番、ブランド名は何か
-- この商品のデザイン、カラー、素材、質感の特徴は何か
-- この商品のサイズ、重量、仕様、スペックは何か
-- この商品の価格、割引、特典、在庫状況は何か
-- この商品の使い方、お手入れ方法、保管方法は何か
-- この商品の対象ユーザー、推奨シーン、用途は何か
-- この商品の他モデルとの違い、シリーズ内での位置づけは何か
-- ソーステキストから読み取れる**商品固有の情報**を複数の角度から深掘り${contentNote}
+【Q&A作成の具体例】
+✅ **良い質問の例（商品そのものについて）**:
+- 「この商品の正式名称と型番は何ですか？」
+- 「この商品の主な素材は何ですか？」
+- 「このキャップのサイズ調整機能はありますか？」
+- 「この商品のカラーバリエーションは何色ありますか？」
+- 「この商品の重さはどのくらいですか？」
+- 「この商品の価格はいくらですか？」
+- 「このデザインの特徴的な部分はどこですか？」
+- 「この商品はどのような場面で使用できますか？」
+- 「この商品のお手入れ方法は？」
+- 「このモデルと他のモデルの違いは何ですか？」
 
-❌ **絶対に含めてはいけない内容**:
-- 一般的な購入方法やサイトの使い方（「購入方法は？」「支払い方法は？」など）
-- サイトの会員登録、ログイン、アカウント管理（「会員登録方法は？」など）
-- 他店舗の在庫確認や店舗情報（「他の店舗の在庫は？」「店舗の営業時間は？」など）
-- 配送、返品、交換などの一般的なサイトポリシー（「配送料は？」「返品できますか？」など）
-- レビューの書き方、ポイントの使い方、クーポンの利用方法
-- 会社情報、お問い合わせ方法、プライバシーポリシー
+❌ **悪い質問の例（サイト機能・サービスについて）**:
+- 「この商品を購入する方法は？」 → 商品ではなくサイト機能
+- 「配送料はいくらですか？」 → 商品ではなく配送サービス
+- 「他の店舗の在庫を確認できますか？」 → 商品ではなく在庫管理システム
+- 「返品はできますか？」 → 商品ではなく返品ポリシー
+- 「ポイントは付きますか？」 → 商品ではなくポイントサービス
+- 「会員登録は必要ですか？」 → 商品ではなくサイト会員制度
+- 「レビューを書くにはどうすればいいですか？」 → 商品ではなくレビュー機能
+- 「再入荷の予定はありますか？」 → 商品ではなく入荷スケジュール
+
+【Q&A作成の視点】（**商品の物理的・機能的特徴のみ**）
+以下の情報を**ソーステキストから**抽出してQ&Aを作成:
+1. **商品識別情報**: 正式名称、型番、ブランド、シリーズ名
+2. **外観・デザイン**: 色、柄、形状、スタイル、ロゴ、装飾
+3. **素材・材質**: 生地、素材の種類、質感、肌触り
+4. **サイズ・寸法**: 具体的な寸法、調整可能範囲、フィット感
+5. **機能・性能**: 特殊機能、防水性、通気性、耐久性
+6. **使用方法**: 着用方法、お手入れ、保管方法、注意点
+7. **価格・バリエーション**: 税込価格、色違い、サイズ違い
+8. **ターゲット・用途**: 推奨ユーザー、使用シーン、季節
+9. **他製品との比較**: 同シリーズ内での違い、特徴的な点
+
+⚠️ **重要な注意**:
+- もしソーステキストに商品情報が少なく、サイト機能の説明ばかりの場合でも、
+  **絶対にサイト機能についてのQ&Aを作らないでください**
+- その場合は、わずかな商品情報から可能な限りQ&Aを作成してください
+- サイト機能の質問を作るくらいなら、Q&A数が少なくても構いません${contentNote}
 
 【出力フォーマット - 必ず守る】
 Q1: [日本語の質問]
@@ -762,38 +839,73 @@ ${content}
 - すべての回答はソーステキストに記載されている情報のみを使用してください
 - ソーステキストに記載されていない商品や情報については一切言及しないでください
 - **情報が限られている場合でも、既存の情報から異なる角度や視点で質問を生成してください**`,
-    en: `You are an expert Q&A creator. Generate EXACTLY ${maxQA} Q&A pairs in ENGLISH from the text below.
+    en: `You are a product-focused Q&A expert. Create ${maxQA} Q&A pairs in ENGLISH about **THE MAIN PRODUCT ONLY** featured on this page.
+
+🎯 【PRIMARY MISSION】
+Your ONLY job is to create Q&As about **THE PRODUCT ITSELF** - its physical features, specifications, and characteristics.
+COMPLETELY IGNORE site features, purchasing process, membership, shipping info, etc.
 
 【ABSOLUTE RULES】
 1. ✅ LANGUAGE: Write 100% in ENGLISH (NO other languages)
 2. ✅ QUANTITY: Generate EXACTLY ${maxQA} distinct Q&A pairs
 3. ✅ QUALITY: Each Q&A must be completely unique with different angles
 4. ❌ NO DUPLICATES: Do NOT repeat similar questions
-5. 🚫 【CRITICAL】Create Q&A ONLY about the products sold/featured on THIS webpage
-   - Use ONLY information written in the source text
-   - Do NOT add external knowledge or general information
-   - Do NOT mention other products not listed in the source text
-   - IGNORE footer information (company info, contact details)
-   - IGNORE site policies, privacy policy, terms of service
+5. 🎯 【STRICTLY ENFORCE】Create Q&A about **THE PRODUCT ITSELF** only:
+   - Physical features (design, color, material, size, weight)
+   - Functions, performance, specifications
+   - Usage methods, care instructions
+   - Price, model number, variations
+   - ONLY use product information explicitly stated in source text
+   
+6. 🚫 【ABSOLUTELY FORBIDDEN】Do NOT include even ONE of these:
+   ❌ Site features: "How to purchase" "Payment methods" "Registration" "Login"
+   ❌ Shipping/Delivery: "Shipping fee" "Delivery method" "Delivery time" "Address change"
+   ❌ Store info: "In-store stock" "Store location" "Business hours" "Other stores"
+   ❌ Points/Benefits: "Point rewards" "Coupon usage" "Campaigns"
+   ❌ After-sales: "Return method" "Exchange" "Warranty" "Repair"
+   ❌ Reviews/Community: "How to write reviews" "Post comments"
+   ❌ Company/Site: "Company info" "Contact" "Privacy policy"
+   ❌ Stock/Restock: "Restock schedule" "Restock notification" "How to check stock"
 
-【Q&A PERSPECTIVES】(**100% FOCUS on product-specific information**)
-✅ **MUST INCLUDE**:
-- What is the official name, model number, and brand of this product?
-- What are the design, color, material, and texture features of this product?
-- What are the size, weight, specifications of this product?
-- What is the price, discount, promotion, stock status of this product?
-- How to use, care for, and store this product?
-- Who is the target user, recommended scenarios, and usage of this product?
-- How does this product differ from other models in the series?
-- Deep dive into **product-specific information** from multiple angles${contentNote}
+【GOOD QUESTION EXAMPLES (About the product itself)】
+✅ "What is the official name and model number of this product?"
+✅ "What material is this product made of?"
+✅ "Does this cap have size adjustment features?"
+✅ "How many color variations are available?"
+✅ "What is the weight of this product?"
+✅ "What is the price of this product?"
+✅ "What are the distinctive design features?"
+✅ "What occasions is this product suitable for?"
+✅ "How should I care for this product?"
+✅ "What's the difference between this and other models?"
 
-❌ **NEVER INCLUDE**:
-- General purchasing methods or site usage ("How to purchase?" "Payment methods?" etc.)
-- Site registration, login, account management ("How to register?" etc.)
-- Other store inventory or store information ("Stock at other stores?" "Store hours?" etc.)
-- General site policies like shipping, returns, exchanges ("Shipping fee?" "Can I return?" etc.)
-- How to write reviews, use points, apply coupons
-- Company info, contact methods, privacy policy
+【BAD QUESTION EXAMPLES (About site features/services)】
+❌ "How do I purchase this product?" → Site feature, not product
+❌ "What is the shipping fee?" → Shipping service, not product
+❌ "Can I check stock at other stores?" → Inventory system, not product
+❌ "Can I return this?" → Return policy, not product
+❌ "Do I earn points?" → Point service, not product
+❌ "Do I need to register?" → Membership system, not product
+❌ "How do I write a review?" → Review feature, not product
+❌ "When will it restock?" → Restock schedule, not product
+
+【Q&A CREATION FOCUS】(**Physical & functional features ONLY**)
+Extract from source text and create Q&As about:
+1. **Product ID**: Official name, model number, brand, series
+2. **Appearance**: Color, pattern, shape, style, logo, decoration
+3. **Material**: Fabric type, material quality, texture
+4. **Size/Dimensions**: Measurements, adjustability, fit
+5. **Functions**: Special features, waterproof, breathability, durability
+6. **Usage**: How to wear/use, care, storage, precautions
+7. **Price/Variations**: Tax-included price, color options, size options
+8. **Target/Purpose**: Recommended users, usage scenarios, season
+9. **Comparisons**: Differences within series, unique features
+
+⚠️ **IMPORTANT NOTE**:
+- Even if source text contains mostly site feature descriptions with little product info,
+  **NEVER create Q&As about site features**
+- In that case, create as many Q&As as possible from the limited product information
+- Better to have fewer Q&As than to include site feature questions${contentNote}
 
 【OUTPUT FORMAT - MUST FOLLOW】
 Q1: [English question]
