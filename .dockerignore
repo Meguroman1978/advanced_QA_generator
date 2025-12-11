@@ -1,8 +1,8 @@
 node_modules
-dist
+# dist - DO NOT IGNORE, needed for pre-built deployment
 .git
 .gitignore
-*.md
+# *.md - Allow documentation
 .env
 .env.local
 npm-debug.log
