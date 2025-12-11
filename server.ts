@@ -522,6 +522,8 @@ function extractContent(html: string): string {
   // 【ステップ1】ノイズとなる要素を徹底的に削除
   $('script, style, noscript, iframe, svg, link').remove();
   $('nav, header, footer').remove(); // ナビゲーション、ヘッダー、フッター
+  $('[class*="footer"], [id*="footer"]').remove(); // フッター（より徹底的）
+  $('[class*="header"], [id*="header"]').remove(); // ヘッダー（より徹底的）
   $('[class*="cookie"], [id*="cookie"]').remove(); // クッキー通知
   $('[class*="sidebar"], [class*="side-bar"], aside').remove(); // サイドバー
   $('[class*="menu"], [class*="navigation"], [role="navigation"]').remove(); // メニュー
@@ -531,7 +533,12 @@ function extractContent(html: string): string {
   $('[class*="comment"], [class*="review"], [class*="rating"]').remove(); // レビュー欄
   $('[class*="banner"], [class*="ad"], [class*="advertisement"]').remove(); // 広告
   $('[class*="newsletter"], [class*="subscribe"]').remove(); // メルマガ購読
-  $('form').remove(); // フォーム（検索、問い合わせなど）
+  $('[class*="policy"], [class*="terms"], [class*="privacy"]').remove(); // ポリシー、規約
+  $('[class*="sitemap"], [class*="company"], [class*="corporate"]').remove(); // サイトマップ、会社情報
+  $('[class*="help"], [class*="faq"], [class*="guide"]').not('[class*="product"]').remove(); // ヘルプ（商品以外）
+  $('[class*="contact"], [class*="support"]').remove(); // お問い合わせ、サポート
+  $('[class*="account"], [class*="login"], [class*="register"]').remove(); // アカウント関連
+  $('form').not('[class*="product"], [class*="cart"]').remove(); // フォーム（商品・カート以外）
   
   // 【ステップ2】商品情報が含まれるメインコンテナを特定（最も重要）
   const mainContentSelectors = [
@@ -719,14 +726,24 @@ async function generateQA(content: string, maxQA: number = 5, language: string =
    - ページ下部の会社情報・連絡先・フッター情報は無視すること
    - サイトポリシー、プライバシーポリシー、利用規約などは無視すること
 
-【Q&A作成の視点】（すべてソーステキストの商品情報のみから）
-- このページで紹介されている主要な商品・サービスとは何か
-- その商品の具体的な特徴・機能は何か
-- その商品の使い方・利用方法はどうか
-- その商品のメリット・デメリットは何か
-- その商品の価格・仕様・スペックはどうか
-- その商品に関する注意事項・制限事項は何か
-- ソーステキストから読み取れる商品情報を複数の角度から深掘り${contentNote}
+【Q&A作成の視点】（**商品固有の情報に100%フォーカス**）
+✅ **必ず含めるべき内容**:
+- この商品の正式名称、型番、ブランド名は何か
+- この商品のデザイン、カラー、素材、質感の特徴は何か
+- この商品のサイズ、重量、仕様、スペックは何か
+- この商品の価格、割引、特典、在庫状況は何か
+- この商品の使い方、お手入れ方法、保管方法は何か
+- この商品の対象ユーザー、推奨シーン、用途は何か
+- この商品の他モデルとの違い、シリーズ内での位置づけは何か
+- ソーステキストから読み取れる**商品固有の情報**を複数の角度から深掘り${contentNote}
+
+❌ **絶対に含めてはいけない内容**:
+- 一般的な購入方法やサイトの使い方（「購入方法は？」「支払い方法は？」など）
+- サイトの会員登録、ログイン、アカウント管理（「会員登録方法は？」など）
+- 他店舗の在庫確認や店舗情報（「他の店舗の在庫は？」「店舗の営業時間は？」など）
+- 配送、返品、交換などの一般的なサイトポリシー（「配送料は？」「返品できますか？」など）
+- レビューの書き方、ポイントの使い方、クーポンの利用方法
+- 会社情報、お問い合わせ方法、プライバシーポリシー
 
 【出力フォーマット - 必ず守る】
 Q1: [日本語の質問]
@@ -759,14 +776,24 @@ ${content}
    - IGNORE footer information (company info, contact details)
    - IGNORE site policies, privacy policy, terms of service
 
-【Q&A PERSPECTIVES】(All from product information in source text only)
-- What is the main product/service featured on this page?
-- What are the specific features/functions of this product?
-- How to use/utilize this product?
-- What are the benefits/drawbacks of this product?
-- What are the prices/specifications of this product?
-- What are the cautions/limitations regarding this product?
-- Deep dive into product information from multiple angles${contentNote}
+【Q&A PERSPECTIVES】(**100% FOCUS on product-specific information**)
+✅ **MUST INCLUDE**:
+- What is the official name, model number, and brand of this product?
+- What are the design, color, material, and texture features of this product?
+- What are the size, weight, specifications of this product?
+- What is the price, discount, promotion, stock status of this product?
+- How to use, care for, and store this product?
+- Who is the target user, recommended scenarios, and usage of this product?
+- How does this product differ from other models in the series?
+- Deep dive into **product-specific information** from multiple angles${contentNote}
+
+❌ **NEVER INCLUDE**:
+- General purchasing methods or site usage ("How to purchase?" "Payment methods?" etc.)
+- Site registration, login, account management ("How to register?" etc.)
+- Other store inventory or store information ("Stock at other stores?" "Store hours?" etc.)
+- General site policies like shipping, returns, exchanges ("Shipping fee?" "Can I return?" etc.)
+- How to write reviews, use points, apply coupons
+- Company info, contact methods, privacy policy
 
 【OUTPUT FORMAT - MUST FOLLOW】
 Q1: [English question]
@@ -838,22 +865,16 @@ ${content}
     };
     const targetLanguage = languageNames[language] || languageNames['ja'];
     
-    // maxQAに応じてmax_tokensを調整
-    // gpt-3.5-turbo: 最大4096トークン（30問まで）
-    // gpt-4o-mini: 最大16384トークン（30問以上）
-    
-    // 30問以上はgpt-4o-miniを使用（より大きなトークン制限）
-    const useGPT4 = maxQA > 30; // 閾値を50→30に変更
-    const model = useGPT4 ? 'gpt-4o-mini' : 'gpt-3.5-turbo';
-    const maxTokensLimit = useGPT4 ? 16384 : 4096;
+    // モデル選択: 常にgpt-4o-miniを使用（より賢く、安価）
+    const model = 'gpt-4o-mini';
+    const maxTokensLimit = 16384;
     const estimatedTokens = Math.min(maxQA * 120 + 1500, maxTokensLimit);
     
-    console.log(`[MODEL SELECTION] maxQA=${maxQA}, useGPT4=${useGPT4}, model=${model}, maxTokensLimit=${maxTokensLimit}`);
-    
+    console.log(`[MODEL SELECTION] model=${model}, maxTokensLimit=${maxTokensLimit}, estimatedTokens=${estimatedTokens}`);
     console.log(`[OpenAI] Model: ${model}, max_tokens: ${estimatedTokens}, target: ${maxQA} Q&As in ${targetLanguage}`);
     
-    // タイムアウトを長めに設定（特に大量生成時）
-    const timeoutMs = maxQA > 30 ? 120000 : 60000; // 30問超える場合は2分、それ以下は1分
+    // タイムアウトを2分に統一
+    const timeoutMs = 120000;
     console.log(`[OpenAI] Timeout set to: ${timeoutMs}ms`);
     
     const response = await openai.chat.completions.create({
@@ -1200,7 +1221,34 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
       }
     } catch (generateError) {
       console.error('❌ Q&A generation threw an error:', generateError);
-      throw generateError;
+      console.error('[GENERATION] Error details:', generateError instanceof Error ? generateError.message : String(generateError));
+      console.error('[GENERATION] Error stack:', generateError instanceof Error ? generateError.stack : 'N/A');
+      
+      // エラーの種類を判定してユーザーフレンドリーなメッセージを返す
+      let errorMessage = 'Q&A生成中にエラーが発生しました。';
+      if (generateError instanceof Error) {
+        if (generateError.message.includes('insufficient_quota') || generateError.message.includes('quota')) {
+          errorMessage = 'OpenAI APIの残高が不足しています。API Keyを確認してください。';
+        } else if (generateError.message.includes('timeout')) {
+          errorMessage = 'Q&A生成がタイムアウトしました。maxQAの値を減らしてみてください。';
+        } else if (generateError.message.includes('rate_limit')) {
+          errorMessage = 'OpenAI APIのレート制限に達しました。しばらく待ってから再試行してください。';
+        } else {
+          errorMessage = `Q&A生成エラー: ${generateError.message}`;
+        }
+      }
+      
+      return res.status(500).json({
+        success: false,
+        error: errorMessage,
+        details: {
+          contentLength: extractedContent.length,
+          maxQA: maxQA,
+          language: language,
+          errorType: generateError instanceof Error ? generateError.name : 'Unknown',
+          errorMessage: generateError instanceof Error ? generateError.message : String(generateError)
+        }
+      } as any);
     }
 
     // 動画推奨が必要かどうかを判定する関数
@@ -1771,34 +1819,68 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
     console.log('  - Combined text length:', combinedText.length, 'characters');
     console.log('  - Text preview:', combinedText.substring(0, 200));
     
-    const qaList = await generateQA(combinedText, maxQA, language, url);
-    console.log(`✅ ${qaList.length}個のQ&Aを生成しました`);
-    console.log('📊 Q&A生成結果の詳細:');
-    console.log('  - 生成されたQ&A数:', qaList.length);
-    console.log('  - 要求されたmaxQA:', maxQA);
-    console.log('  - 使用言語:', language);
-    console.log('  - 入力テキスト長:', combinedText.length);
-    
-    // Q&Aが0個の場合は詳細ログ
-    if (qaList.length === 0) {
-      console.error('❌❌❌ CRITICAL ERROR: No Q&As generated! ❌❌❌');
-      console.error('  - maxQA requested:', maxQA);
-      console.error('  - language:', language);
-      console.error('  - text length:', combinedText.length);
-      console.error('  - text sample:', combinedText.substring(0, 500));
-      console.error('  - FULL TEXT:', combinedText);
+    let qaList: Array<{question: string, answer: string}> = [];
+    try {
+      qaList = await generateQA(combinedText, maxQA, language, url);
+      console.log(`✅ ${qaList.length}個のQ&Aを生成しました`);
+      console.log('📊 Q&A生成結果の詳細:');
+      console.log('  - 生成されたQ&A数:', qaList.length);
+      console.log('  - 要求されたmaxQA:', maxQA);
+      console.log('  - 使用言語:', language);
+      console.log('  - 入力テキスト長:', combinedText.length);
       
-      // エラーレスポンスを返す
-      return res.status(400).json({
+      // Q&Aが0個の場合は詳細ログ
+      if (qaList.length === 0) {
+        console.error('❌❌❌ CRITICAL ERROR: No Q&As generated! ❌❌❌');
+        console.error('  - maxQA requested:', maxQA);
+        console.error('  - language:', language);
+        console.error('  - text length:', combinedText.length);
+        console.error('  - text sample:', combinedText.substring(0, 500));
+        console.error('  - FULL TEXT:', combinedText);
+        
+        // エラーレスポンスを返す
+        return res.status(400).json({
+          success: false,
+          error: `OCRからQ&Aを生成できませんでした。\n\n考えられる原因:\n1. 画像からのテキスト抽出量が不十分（${combinedText.length}文字）\n2. OpenAI APIエラー（残高不足またはレート制限）\n3. プロンプトが厳しすぎる\n\nデバッグ情報:\n- 抽出テキスト長: ${combinedText.length}文字\n- 要求Q&A数: ${maxQA}個\n- 使用言語: ${language}\n\nFly.ioログで詳細を確認してください。`,
+          data: {
+            diagnostics: {
+              extractedTextLength: combinedText.length,
+              filesProcessed: files.length,
+              extractedText: combinedText,
+              maxQA: maxQA,
+              language: language
+            }
+          }
+        });
+      }
+    } catch (generateError) {
+      console.error('❌ OCR Q&A generation threw an error:', generateError);
+      console.error('[OCR] Error details:', generateError instanceof Error ? generateError.message : String(generateError));
+      
+      let errorMessage = 'OCRテキストからQ&A生成中にエラーが発生しました。';
+      if (generateError instanceof Error) {
+        if (generateError.message.includes('insufficient_quota') || generateError.message.includes('quota')) {
+          errorMessage = 'OpenAI APIの残高が不足しています。API Keyを確認してください。';
+        } else if (generateError.message.includes('timeout')) {
+          errorMessage = 'Q&A生成がタイムアウトしました。maxQAの値を減らしてみてください。';
+        } else if (generateError.message.includes('rate_limit')) {
+          errorMessage = 'OpenAI APIのレート制限に達しました。しばらく待ってから再試行してください。';
+        } else {
+          errorMessage = `OCR Q&A生成エラー: ${generateError.message}`;
+        }
+      }
+      
+      return res.status(500).json({
         success: false,
-        error: `OCRからQ&Aを生成できませんでした。\n\n考えられる原因:\n1. 画像からのテキスト抽出量が不十分（${combinedText.length}文字）\n2. OpenAI APIエラー（残高不足またはレート制限）\n3. プロンプトが厳しすぎる\n\nデバッグ情報:\n- 抽出テキスト長: ${combinedText.length}文字\n- 要求Q&A数: ${maxQA}個\n- 使用言語: ${language}\n\nFly.ioログで詳細を確認してください。`,
+        error: errorMessage,
         data: {
           diagnostics: {
             extractedTextLength: combinedText.length,
             filesProcessed: files.length,
-            extractedText: combinedText,
             maxQA: maxQA,
-            language: language
+            language: language,
+            errorType: generateError instanceof Error ? generateError.name : 'Unknown',
+            errorMessage: generateError instanceof Error ? generateError.message : String(generateError)
           }
         }
       });

@@ -431,11 +431,16 @@ textarea {
 }
 
 .badge-modern {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.3px;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .badge-collected {
