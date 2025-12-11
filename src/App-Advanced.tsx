@@ -333,14 +333,28 @@ function AppAdvanced() {
       console.log('[FETCH] Response Content-Type:', contentType);
       console.log('[FETCH] Response status:', response.status);
       
+      let responseText = '';
       try {
         data = await response.json();
       } catch (jsonError) {
         console.error('[FETCH] JSON parse error:', jsonError);
-        // Content-Typeをチェックして詳細なエラーメッセージを提供
-        if (!contentType || !contentType.includes('application/json')) {
-          console.error('[FETCH] Response was not JSON. Content-Type:', contentType);
+        // エラー時にテキストを取得
+        try {
+          const responseClone = response.clone();
+          responseText = await responseClone.text();
+          console.error('[FETCH] Response text:', responseText.substring(0, 500));
+        } catch (textError) {
+          console.error('[FETCH] Could not read response text:', textError);
+        }
+        // Content-Typeをチェックして詳細なエラーメッセージを提供（エラーレスポンスも許容）
+        if (!contentType || (!contentType.includes('application/json') && !contentType.includes('text/html'))) {
+          console.error('[FETCH] Response was not JSON or HTML. Content-Type:', contentType);
           throw new Error('サーバーから無効なレスポンスが返されました。ソースコードが正しく貼り付けられているか、またはサーバーエラーが発生していないか確認してください。ブラウザコンソール（F12）で詳細を確認してください。');
+        }
+        // HTMLの場合はサーバーエラーページの可能性
+        if (contentType && contentType.includes('text/html')) {
+          console.error('[FETCH] Server returned HTML (likely error page)');
+          throw new Error('サーバーがエラーページを返しました。入力内容を確認してください。ブラウザコンソール（F12）で詳細を確認してください。');
         }
         throw new Error('サーバーから無効なJSON形式のレスポンスが返されました。ブラウザコンソールで詳細を確認してください。');
       }
@@ -926,15 +940,16 @@ function AppAdvanced() {
                           }}
                           className="button-apple"
                           style={{
-                            padding: '12px 20px',
+                            padding: '6px 12px',
                             backgroundColor: '#ff3b30',
                             color: 'white',
                             border: 'none',
-                            borderRadius: '12px',
+                            borderRadius: '8px',
                             cursor: 'pointer',
-                            fontSize: '14px',
+                            fontSize: '12px',
                             fontWeight: '600',
-                            whiteSpace: 'nowrap'
+                            whiteSpace: 'nowrap',
+                            minWidth: 'auto'
                           }}
                         >
                           🗑️ {t('sourceCodeDeleteButton')}

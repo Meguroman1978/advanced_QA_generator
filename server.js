@@ -634,9 +634,10 @@ A2: [日本語の詳細な回答 - ソーステキストの情報のみ]
 ${content}
 
 【最重要】
-- 必ず${maxQA}個の異なるQ&Aを日本語で生成してください
+- **可能な限り${maxQA}個に近いQ&Aを日本語で生成してください**（最低でも${Math.floor(maxQA * 0.5)}個以上）
 - すべての回答はソーステキストに記載されている情報のみを使用してください
-- ソーステキストに記載されていない商品や情報については一切言及しないでください`,
+- ソーステキストに記載されていない商品や情報については一切言及しないでください
+- **情報が限られている場合でも、既存の情報から異なる角度や視点で質問を生成してください**`,
         en: `You are an expert Q&A creator. Generate EXACTLY ${maxQA} Q&A pairs in ENGLISH from the text below.
 
 【ABSOLUTE RULES】
@@ -673,9 +674,10 @@ A2: [Detailed English answer - source text only]
 ${content}
 
 【CRITICAL】
-- Generate EXACTLY ${maxQA} distinct Q&A pairs in ENGLISH
+- **Generate as close to ${maxQA} Q&A pairs as possible** (minimum ${Math.floor(maxQA * 0.5)}+)
 - All answers must use ONLY information stated in the source text
-- Do NOT mention any products not listed in the source text`,
+- Do NOT mention any products not listed in the source text
+- **Even with limited information, create questions from different angles and perspectives**`,
         zh: `你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
 
 【绝对规则】
@@ -712,9 +714,10 @@ A2: [详细的中文答案]
 ${content}
 
 【最重要】
-- 必须用中文生成正好${maxQA}个不同的问答对
+- **尽可能生成接近${maxQA}个的问答对**（最少${Math.floor(maxQA * 0.5)}个以上）
 - 所有答案必须仅使用源文本中说明的信息
-- 不要提及源文本中未列出的任何产品`
+- 不要提及源文本中未列出的任何产品
+- **即使信息有限，也要从不同角度和视角创建问题**`
     };
     try {
         const prompt = languagePrompts[language] || languagePrompts['ja'];
@@ -1006,14 +1009,19 @@ app.post('/api/workflow', async (req, res) => {
         console.log('Extracting content...');
         const extractedContent = extractContent(html);
         diagnostics.contentLength = extractedContent.length;
-        // コンテンツが短すぎる場合はエラー
-        if (extractedContent.length < 100) {
+        // コンテンツが短すぎる場合は警告（ただし、50文字以上ならQ&A生成を試行）
+        if (extractedContent.length < 50) {
             console.warn(`⚠️ Content too short: ${extractedContent.length} characters`);
             return res.status(400).json({
                 success: false,
                 error: 'コンテンツが短すぎます。HTMLソースコードが正しく貼り付けられているか確認してください。提案: ブラウザで「ページのソースを表示」から完全なHTMLをコピーしてください。',
                 details: `Content length: ${extractedContent.length} characters. Preview: ${extractedContent.substring(0, 200)}`
             });
+        }
+        // 50-200文字の場合は警告を出すが続行
+        if (extractedContent.length < 200) {
+            console.warn(`⚠️ WARNING: Content is quite short (${extractedContent.length} chars), Q&A generation might be limited`);
+            console.log(`📄 Full content: ${extractedContent}`);
         }
         // ステップ3: OpenAI APIで複数のQ&Aを生成
         console.log(`[GENERATION] Starting Q&A generation with maxQA=${maxQA}, language=${language}`);
@@ -1502,10 +1510,10 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
         // 抽出されたテキストを結合
         const combinedText = extractedTexts.join('\n\n--- 次のページ ---\n\n');
         console.log(`\n📝 結合後のテキスト長: ${combinedText.length} 文字`);
-        if (combinedText.length < 100) {
+        if (combinedText.length < 50) {
             return res.status(400).json({
                 success: false,
-                error: 'テキストの抽出に失敗しました。画像が不鮮明な可能性があります。',
+                error: 'テキストの抽出に失敗しました。画像が不鮮明な可能性があります。または、画像に日本語テキストが少ない可能性があります。',
                 data: {
                     diagnostics: {
                         extractedTextLength: combinedText.length,
@@ -1514,6 +1522,11 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
                     }
                 }
             });
+        }
+        // 50-200文字の場合は警告を出すが続行
+        if (combinedText.length < 200) {
+            console.warn(`⚠️ WARNING: OCR extracted text is quite short (${combinedText.length} chars), Q&A generation might be limited`);
+            console.log(`📄 Full OCR text: ${combinedText}`);
         }
         // Q&A生成（リクエストからmaxQAとlanguageを取得）
         const maxQA = req.body.maxQA ? parseInt(req.body.maxQA, 10) : 40;
