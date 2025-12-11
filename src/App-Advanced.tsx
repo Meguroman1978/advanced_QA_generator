@@ -327,7 +327,24 @@ function AppAdvanced() {
       setProcessStage('organizing');
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      const data = await response.json();
+      // レスポンスのContent-Typeをチェック
+      const contentType = response.headers.get('content-type');
+      console.log('[FETCH] Response Content-Type:', contentType);
+      
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await response.text();
+        console.error('[FETCH] Non-JSON response received:', textResponse.substring(0, 500));
+        throw new Error('サーバーから無効なレスポンスが返されました。ソースコードが正しく貼り付けられているか、またはサーバーエラーが発生していないか確認してください。');
+      }
+
+      // JSONパースエラーをキャッチ
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('[FETCH] JSON parse error:', jsonError);
+        throw new Error('サーバーから無効なJSON形式のレスポンスが返されました。ブラウザコンソールで詳細を確認してください。');
+      }
 
       if (!response.ok || !data.success) {
         // OpenAI API残高不足エラーの検出
@@ -868,8 +885,31 @@ function AppAdvanced() {
                       }}
                     />
                     {sourceCodeInput && (
-                      <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px', fontSize: '14px', color: '#2e7d32' }}>
-                        ✅ {t('sourceCodeModePasted').replace('{size}', (sourceCodeInput.length / 1024).toFixed(2))}
+                      <div style={{ marginTop: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <div style={{ flex: 1, padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px', fontSize: '14px', color: '#2e7d32' }}>
+                          ✅ {t('sourceCodeModePasted').replace('{size}', (sourceCodeInput.length / 1024).toFixed(2))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSourceCodeInput('');
+                            showSuccess(`🗑️ ${t('sourceCodeDeleted')}`);
+                          }}
+                          className="button-apple"
+                          style={{
+                            padding: '12px 20px',
+                            backgroundColor: '#ff3b30',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          🗑️ {t('sourceCodeDeleteButton')}
+                        </button>
                       </div>
                     )}
                   </div>

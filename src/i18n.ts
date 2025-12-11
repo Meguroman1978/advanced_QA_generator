@@ -204,6 +204,8 @@ export const translations = {
     sourceCodeModePasteInstructions: '貼り付け方法: テキストエリア内をクリック → Cmd+V (Mac) または Ctrl+V (Windows)',
     sourceCodeModePlaceholder: '1. Chrome拡張機能で「HTMLをコピー」をクリック\n2. ここをクリック\n3. Cmd+V（Mac）または Ctrl+V（Windows）で貼り付け\n\nHTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコードが表示されます',
     sourceCodeModePasted: 'HTMLが貼り付けられました（{size} KB）',
+    sourceCodeDeleteButton: '削除',
+    sourceCodeDeleted: 'ソースコードを削除しました',
   },
   
   en: {
@@ -408,6 +410,8 @@ export const translations = {
     sourceCodeModePasteInstructions: 'How to paste: Click in text area → Cmd+V (Mac) or Ctrl+V (Windows)',
     sourceCodeModePlaceholder: '1. Click "Copy HTML" in Chrome extension\n2. Click here\n3. Paste with Cmd+V (Mac) or Ctrl+V (Windows)\n\nOnce HTML is pasted, code like <!DOCTYPE html>... will appear here',
     sourceCodeModePasted: 'HTML pasted ({size} KB)',
+    sourceCodeDeleteButton: 'Delete',
+    sourceCodeDeleted: 'Source code deleted',
   },
   
   zh: {
@@ -612,6 +616,8 @@ export const translations = {
     sourceCodeModePasteInstructions: '如何粘贴：点击文本区域 → Cmd+V（Mac）或 Ctrl+V（Windows）',
     sourceCodeModePlaceholder: '1. 在Chrome扩展程序中点击"复制HTML"\n2. 点击此处\n3. 使用Cmd+V（Mac）或Ctrl+V（Windows）粘贴\n\n粘贴HTML后，此处将显示类似 <!DOCTYPE html>... 的代码',
     sourceCodeModePasted: '已粘贴HTML（{size} KB）',
+    sourceCodeDeleteButton: '删除',
+    sourceCodeDeleted: '已删除源代码',
   }
 };
 

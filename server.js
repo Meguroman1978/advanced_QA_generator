@@ -1006,6 +1006,15 @@ app.post('/api/workflow', async (req, res) => {
         console.log('Extracting content...');
         const extractedContent = extractContent(html);
         diagnostics.contentLength = extractedContent.length;
+        // コンテンツが短すぎる場合はエラー
+        if (extractedContent.length < 100) {
+            console.warn(`⚠️ Content too short: ${extractedContent.length} characters`);
+            return res.status(400).json({
+                success: false,
+                error: 'コンテンツが短すぎます。HTMLソースコードが正しく貼り付けられているか確認してください。提案: ブラウザで「ページのソースを表示」から完全なHTMLをコピーしてください。',
+                details: `Content length: ${extractedContent.length} characters. Preview: ${extractedContent.substring(0, 200)}`
+            });
+        }
         // ステップ3: OpenAI APIで複数のQ&Aを生成
         console.log(`[GENERATION] Starting Q&A generation with maxQA=${maxQA}, language=${language}`);
         console.log(`[GENERATION] Content length: ${extractedContent.length} characters`);
