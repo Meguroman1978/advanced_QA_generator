@@ -703,11 +703,24 @@ async function generateQA(content, maxQA = 5, language = 'ja', productUrl) {
         ? `\n\n⚠️ 注意: ソーステキストが少ない場合でも、必ずソーステキストの情報のみを使用してください。外部情報や一般知識を追加しないでください。テキストから読み取れる情報を複数の角度から深掘りして${maxQA}個のQ&Aを作成してください。`
         : '';
     const languagePrompts = {
-        ja: `あなたは商品専門のQ&A作成エキスパートです。以下のソーステキストから、このページで紹介されている**メイン商品のみ**について、日本語で${maxQA}個のQ&Aを作成してください。
+        ja: `🚫🚫🚫 絶対禁止事項 🚫🚫🚫
+以下の語句を含む質問は**絶対に作成してはいけません**:
+「店舗」「在庫」「購入」「配送」「送料」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認」「表示」「数分」「反映」「遅延」「リアルタイム」
+
+これらの語句が含まれる質問を1つでも作成した場合、タスクは完全に失敗します。
 
 🎯 【最重要ミッション】
-あなたの唯一の仕事は「**このページで販売されているメイン商品そのもの**」についてのQ&Aを作成することです。
-サイトの使い方、購入手順、会員サービス、配送情報などは**完全に無視**してください。
+あなたの唯一の仕事は「**商品の物理的な特徴**」についてのQ&Aを作成することです。
+- 商品名・型番
+- 色・デザイン
+- 素材・材質
+- サイズ・寸法
+- 機能・性能
+- 価格
+
+サイトの使い方、購入手順、会員サービス、配送情報、店舗情報などは**完全に無視**してください。
+
+あなたは商品専門のQ&A作成エキスパートです。以下のソーステキストから、このページで紹介されている**メイン商品のみ**について、日本語で${maxQA}個のQ&Aを作成してください。
 
 【絶対守るべきルール】
 1. ✅ 言語: 質問と回答は100%日本語で書くこと（英語禁止）
@@ -790,14 +803,29 @@ ${content}
 - ソーステキストに記載されていない商品や情報については一切言及しないでください
 - **情報が限られている場合でも、既存の情報から異なる角度や視点で質問を生成してください**
 
-【生成後の最終確認】
-生成したすべてのQ&Aをチェックし、以下のいずれかの語句が含まれる質問は削除してください:
-「購入」「配送」「送料」「店舗」「在庫」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認方法」`,
-        en: `You are a product-focused Q&A expert. Create ${maxQA} Q&A pairs in ENGLISH about **THE MAIN PRODUCT ONLY** featured on this page.
+【生成後の最終確認 - 必須】
+生成したすべてのQ&Aを再度チェックし、以下の語句が含まれる質問は**すべて削除**してください:
+「店舗」「在庫」「購入」「配送」「送料」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認」「表示」「反映」「遅延」「リアルタイム」「数分」
+
+削除後、残ったQ&Aのみを出力してください。`,
+        en: `🚫🚫🚫 ABSOLUTELY FORBIDDEN 🚫🚫🚫
+You MUST NOT create questions containing ANY of these words:
+"store" "inventory" "stock" "purchase" "buy" "shipping" "delivery" "fee" "points" "member" "return" "exchange" "warranty" "review" "comment" "contact" "register" "login" "payment" "checkout" "restock" "check" "confirm" "display" "real-time" "reflect" "delay" "minutes"
+
+If you create even ONE question with these words, the task is COMPLETELY FAILED.
 
 🎯 【PRIMARY MISSION】
-Your ONLY job is to create Q&As about **THE PRODUCT ITSELF** - its physical features, specifications, and characteristics.
-COMPLETELY IGNORE site features, purchasing process, membership, shipping info, etc.
+Your ONLY job is to create Q&As about **THE PRODUCT'S PHYSICAL FEATURES**:
+- Product name & model number
+- Color & design
+- Material & fabric
+- Size & dimensions
+- Functions & performance
+- Price
+
+COMPLETELY IGNORE site features, purchasing process, membership, shipping info, store info, etc.
+
+You are a product-focused Q&A expert. Create ${maxQA} Q&A pairs in ENGLISH about **THE MAIN PRODUCT ONLY** featured on this page.
 
 【ABSOLUTE RULES】
 1. ✅ LANGUAGE: Write 100% in ENGLISH (NO other languages)
@@ -879,10 +907,29 @@ ${content}
 - Do NOT mention any products not listed in the source text
 - **Even with limited information, create questions from different angles and perspectives**
 
-【FINAL VERIFICATION】
-After generating all Q&As, check and DELETE any questions containing these terms:
-"purchase" "shipping" "delivery" "store" "stock" "points" "member" "return" "exchange" "warranty" "review" "comment" "contact" "register" "login" "payment" "checkout" "restock" "how to check"`,
-        zh: `你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
+【FINAL VERIFICATION - MANDATORY】
+After generating all Q&As, CHECK AGAIN and DELETE ALL questions containing these terms:
+"store" "inventory" "stock" "purchase" "buy" "shipping" "delivery" "fee" "points" "member" "return" "exchange" "warranty" "review" "comment" "contact" "register" "login" "payment" "checkout" "restock" "check" "confirm" "display" "real-time" "reflect" "delay" "minutes"
+
+Output ONLY the remaining Q&As after deletion.`,
+        zh: `🚫🚫🚫 绝对禁止事项 🚫🚫🚫
+以下词语的问题**绝对不能创建**:
+"店铺""库存""购买""配送""运费""积分""会员""退货""换货""保修""评论""留言""联系""注册""登录""支付""结账""补货""确认""显示""实时""反映""延迟""分钟"
+
+如果创建了哪怕一个包含这些词语的问题，任务就完全失败。
+
+🎯 【最重要使命】
+你唯一的工作是创建关于**产品物理特征**的问答:
+- 产品名称和型号
+- 颜色和设计
+- 材料和质地
+- 尺寸和规格
+- 功能和性能
+- 价格
+
+完全忽略网站功能、购买流程、会员服务、配送信息、店铺信息等。
+
+你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
 
 【绝对规则】
 1. ✅ 语言: 100%用中文编写（禁止英文）
@@ -923,9 +970,11 @@ ${content}
 - 不要提及源文本中未列出的任何产品
 - **即使信息有限，也要从不同角度和视角创建问题**
 
-【最终验证】
-生成所有问答后，检查并删除包含以下术语的问题：
-"购买""配送""运费""店铺""库存""积分""会员""退货""换货""保修""评论""留言""联系""注册""登录""支付""结账""补货""如何查看"`
+【最终验证 - 必须】
+生成所有问答后，再次检查并删除包含以下术语的**所有问题**：
+"店铺""库存""购买""配送""运费""积分""会员""退货""换货""保修""评论""留言""联系""注册""登录""支付""结账""补货""确认""显示""反映""延迟""实时""分钟"
+
+删除后，仅输出剩余的问答。`
     };
     try {
         const prompt = languagePrompts[language] || languagePrompts['ja'];
@@ -1231,11 +1280,20 @@ app.post('/api/workflow', async (req, res) => {
         console.log(`[GENERATION] Starting Q&A generation with maxQA=${maxQA}, language=${language}`);
         console.log(`[GENERATION] Content length: ${extractedContent.length} characters`);
         console.log(`[GENERATION] Content preview:`, extractedContent.substring(0, 300));
+        console.log(`[GENERATION] ============ FULL EXTRACTED CONTENT ============`);
+        console.log(extractedContent);
+        console.log(`[GENERATION] ================================================`);
         let qaList = [];
         try {
             qaList = await generateQA(extractedContent, maxQA, language, effectiveUrl);
             console.log(`[GENERATION] Generated ${qaList.length} Q&A items`);
             console.log(`[GENERATION] Q&A generation completed successfully`);
+            console.log(`[GENERATION] ============ GENERATED Q&As ============`);
+            qaList.forEach((qa, index) => {
+                console.log(`Q${index + 1}: ${qa.question}`);
+                console.log(`A${index + 1}: ${qa.answer.substring(0, 100)}...`);
+            });
+            console.log(`[GENERATION] ==========================================`);
             if (qaList.length === 0) {
                 console.error('❌❌❌ CRITICAL: Q&A generation returned 0 items ❌❌❌');
                 console.error('[GENERATION] Input content length:', extractedContent.length);
