@@ -36,9 +36,9 @@ export const translations = {
     // エクスポート設定
     exportSettingsLabel: 'エクスポート設定',
     fileFormatLabel: 'ファイル形式（複数選択可）',
-    includeLabelsText: '出力するPDF/Word/Textファイルにラベル（ソース、情報源タイプ、URL）を含める',
+    includeLabelsText: '出力ファイルにもラベルを含める',
     includeVideoInfoText: '推奨作成動画例などの情報も含める',
-    includeLabelsNote: '※Excelと画面表示は常にラベルを表示します',
+    includeLabelsNote: '',
     
     // ボタン
     startGenerationButton: 'Q&A生成を開始',
@@ -164,8 +164,8 @@ export const translations = {
     errorDeleteFailed: '削除に失敗しました',
     errorInputRequired: 'URLまたはソースコードを入力してください',
     
-    // ボット検知回避
-    botBypassTitle: 'ボット検知を100%回避する方法',
+    // クローラーアクセス禁止サイト対応
+    botBypassTitle: 'クローラーアクセス禁止サイトを対象にする際の作業方法',
     botBypassShow: '表示する',
     botBypassHide: '非表示にする',
     botBypassInstructions: 'Chrome拡張機能を使用した手順：',
@@ -181,7 +181,8 @@ export const translations = {
     botBypassButtonOCR: '画像OCRモード',
     botBypassButtonOCRActive: '✅ 画像OCRモード',
     botBypassExtensionInstall: '拡張機能のインストール方法を表示',
-    botBypassExtensionStep1: 'GitHubリポジトリの BROWSER_EXTENSION フォルダをダウンロード',
+    botBypassExtensionStep1: 'Chrome拡張機能をダウンロード',
+    botBypassDownloadExtension: '拡張機能をダウンロード',
     botBypassExtensionStep2: 'Chromeで chrome://extensions/ を開く',
     botBypassExtensionStep3: '「デベロッパーモード」をON',
     botBypassExtensionStep4: '「パッケージ化されていない拡張機能を読み込む」をクリック',
@@ -239,9 +240,9 @@ export const translations = {
     // Export Settings
     exportSettingsLabel: 'Export Settings',
     fileFormatLabel: 'File Format (Multiple Selection Allowed)',
-    includeLabelsText: 'Include labels (Source, Type, URL) in exported PDF/Word/Text files',
+    includeLabelsText: 'Include labels in output files',
     includeVideoInfoText: 'Include video example info',
-    includeLabelsNote: '※Excel and screen display always show labels',
+    includeLabelsNote: '',
     
     // Buttons
     startGenerationButton: 'Start Q&A Generation',
@@ -367,8 +368,8 @@ export const translations = {
     errorDeleteFailed: 'Delete failed',
     errorInputRequired: 'Please enter URL or source code',
     
-    // Bot Detection Bypass
-    botBypassTitle: '100% Bot Detection Bypass Method',
+    // Crawler-Blocked Sites Access Method
+    botBypassTitle: 'How to Access Crawler-Blocked Sites',
     botBypassShow: 'Show',
     botBypassHide: 'Hide',
     botBypassInstructions: 'Steps using Chrome Extension:',
@@ -384,7 +385,8 @@ export const translations = {
     botBypassButtonOCR: 'Image OCR Mode',
     botBypassButtonOCRActive: '✅ Image OCR Mode',
     botBypassExtensionInstall: 'Show extension installation instructions',
-    botBypassExtensionStep1: 'Download BROWSER_EXTENSION folder from GitHub repository',
+    botBypassExtensionStep1: 'Download Chrome extension',
+    botBypassDownloadExtension: 'Download Extension',
     botBypassExtensionStep2: 'Open chrome://extensions/ in Chrome',
     botBypassExtensionStep3: 'Turn ON "Developer mode"',
     botBypassExtensionStep4: 'Click "Load unpacked extension"',
@@ -442,9 +444,9 @@ export const translations = {
     // 导出设置
     exportSettingsLabel: '导出设置',
     fileFormatLabel: '文件格式（可多选）',
-    includeLabelsText: '在导出的PDF/Word/文本文件中包含标签（来源、类型、URL）',
+    includeLabelsText: '输出文件中也包含标签',
     includeVideoInfoText: '包含推荐视频示例等信息',
-    includeLabelsNote: '※Excel和屏幕显示始终显示标签',
+    includeLabelsNote: '',
     
     // 按钮
     startGenerationButton: '开始问答生成',
@@ -570,8 +572,8 @@ export const translations = {
     errorDeleteFailed: '删除失败',
     errorInputRequired: '请输入网址或源代码',
     
-    // 机器人检测绕过
-    botBypassTitle: '100%绕过机器人检测的方法',
+    // 访问禁止爬虫的网站
+    botBypassTitle: '访问禁止爬虫网站的操作方法',
     botBypassShow: '显示',
     botBypassHide: '隐藏',
     botBypassInstructions: '使用Chrome扩展程序的步骤：',
@@ -587,7 +589,8 @@ export const translations = {
     botBypassButtonOCR: '图像OCR模式',
     botBypassButtonOCRActive: '✅ 图像OCR模式',
     botBypassExtensionInstall: '显示扩展程序安装说明',
-    botBypassExtensionStep1: '从GitHub仓库下载 BROWSER_EXTENSION 文件夹',
+    botBypassExtensionStep1: '下载Chrome扩展程序',
+    botBypassDownloadExtension: '下载扩展程序',
     botBypassExtensionStep2: '在Chrome中打开 chrome://extensions/',
     botBypassExtensionStep3: '开启"开发者模式"',
     botBypassExtensionStep4: '点击"加载已解压的扩展程序"',

@@ -592,88 +592,6 @@ function AppAdvanced() {
             </div>
           </div>
 
-          {/* ボット検知回避セクション */}
-          <div className="form-section-apple bot-bypass-section-apple">
-            <div 
-              onClick={() => setBotBypassOpen(!botBypassOpen)}
-              style={{ 
-                cursor: 'pointer', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
-                userSelect: 'none'
-              }}
-            >
-              <h3 className="section-title-apple" style={{ margin: 0 }}>
-                🔓 {t('botBypassTitle')}
-              </h3>
-              <span style={{ fontSize: '20px', color: 'var(--apple-gray)', transition: 'transform 0.3s', transform: botBypassOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                ▼
-              </span>
-            </div>
-            
-            {botBypassOpen && (
-              <div style={{ marginTop: '20px', animation: 'fadeIn 0.3s ease-out' }}>
-                <p style={{ fontSize: '15px', marginBottom: '16px', color: 'var(--apple-gray)' }}>
-                  <strong>{t('botBypassInstructions')}</strong>
-                </p>
-                <ol style={{ fontSize: '14px', marginBottom: '20px', paddingLeft: '24px', lineHeight: '1.8', color: 'var(--apple-gray)' }}>
-                  <li>{t('botBypassStep1')}</li>
-                  <li>{t('botBypassStep2')}</li>
-                  <li><strong>{t('botBypassStep3')}</strong></li>
-                  <li>{t('botBypassStep4')}</li>
-                  <li>{t('botBypassStep5')}</li>
-                  <li><strong>{t('botBypassStep6')}</strong></li>
-                  <li>{t('botBypassStep7')}</li>
-                </ol>
-                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUseSourceCode(!useSourceCode);
-                      setUseImageOCR(false);
-                    }}
-                    className="button-apple"
-                    style={{
-                      width: 'auto',
-                      padding: '12px 24px',
-                      backgroundColor: useSourceCode ? 'var(--apple-blue)' : '#34c759',
-                    }}
-                  >
-                    {useSourceCode ? t('botBypassButtonSourceCodeActive') : `📝 ${t('botBypassButtonSourceCode')}`}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUseImageOCR(!useImageOCR);
-                      setUseSourceCode(false);
-                    }}
-                    className="button-apple"
-                    style={{
-                      width: 'auto',
-                      padding: '12px 24px',
-                      backgroundColor: useImageOCR ? 'var(--apple-blue)' : 'var(--apple-gray)',
-                    }}
-                  >
-                    {useImageOCR ? t('botBypassButtonOCRActive') : `📷 ${t('botBypassButtonOCR')}`}
-                  </button>
-                </div>
-                <details style={{ fontSize: '14px', cursor: 'pointer', color: 'var(--apple-gray)' }}>
-                  <summary style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--apple-black)' }}>
-                    {t('botBypassExtensionInstall')}
-                  </summary>
-                  <ol style={{ paddingLeft: '24px', lineHeight: '1.6', marginTop: '12px' }}>
-                    <li>{t('botBypassExtensionStep1').replace('BROWSER_EXTENSION', '')}<code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>BROWSER_EXTENSION</code>{t('botBypassExtensionStep1').includes('フォルダ') ? 'フォルダ' : t('botBypassExtensionStep1').includes('folder') ? ' folder' : '文件夹'}</li>
-                    <li>{t('botBypassExtensionStep2').replace('chrome://extensions/', '')}<code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>chrome://extensions/</code></li>
-                    <li>{t('botBypassExtensionStep3')}</li>
-                    <li>{t('botBypassExtensionStep4')}</li>
-                    <li>{t('botBypassExtensionStep5').replace('BROWSER_EXTENSION', '')}<code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>BROWSER_EXTENSION</code>{t('botBypassExtensionStep5').includes('フォルダ') ? 'フォルダ' : t('botBypassExtensionStep5').includes('folder') ? ' folder' : '文件夹'}</li>
-                  </ol>
-                </details>
-              </div>
-            )}
-          </div>
-
           {/* 画像OCRモード */}
           {useImageOCR && (
             <div className="form-section-apple image-ocr-section-apple" style={{
@@ -839,6 +757,105 @@ function AppAdvanced() {
             </div>
           </div>
 
+          {/* クローラーアクセス禁止サイト対応セクション - 生成設定の直前に配置 */}
+          <div className="form-section-apple bot-bypass-section-apple">
+            <div 
+              onClick={() => setBotBypassOpen(!botBypassOpen)}
+              style={{ 
+                cursor: 'pointer', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                userSelect: 'none'
+              }}
+            >
+              <h3 className="section-title-apple" style={{ margin: 0 }}>
+                🔓 {t('botBypassTitle')}
+              </h3>
+              <span style={{ fontSize: '20px', color: 'var(--apple-gray)', transition: 'transform 0.3s', transform: botBypassOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                ▼
+              </span>
+            </div>
+            
+            {botBypassOpen && (
+              <div style={{ marginTop: '20px', animation: 'fadeIn 0.3s ease-out' }}>
+                <p style={{ fontSize: '15px', marginBottom: '16px', color: 'var(--apple-gray)' }}>
+                  <strong>{t('botBypassInstructions')}</strong>
+                </p>
+                <ol style={{ fontSize: '14px', marginBottom: '20px', paddingLeft: '24px', lineHeight: '1.8', color: 'var(--apple-gray)' }}>
+                  <li>{t('botBypassStep1')}</li>
+                  <li>{t('botBypassStep2')}</li>
+                  <li><strong>{t('botBypassStep3')}</strong></li>
+                  <li>{t('botBypassStep4')}</li>
+                  <li>{t('botBypassStep5')}</li>
+                  <li><strong>{t('botBypassStep6')}</strong></li>
+                  <li>{t('botBypassStep7')}</li>
+                </ol>
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseSourceCode(!useSourceCode);
+                      setUseImageOCR(false);
+                    }}
+                    className="button-apple"
+                    style={{
+                      width: 'auto',
+                      padding: '12px 24px',
+                      backgroundColor: useSourceCode ? 'var(--apple-blue)' : '#34c759',
+                    }}
+                  >
+                    {useSourceCode ? t('botBypassButtonSourceCodeActive') : `📝 ${t('botBypassButtonSourceCode')}`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseImageOCR(!useImageOCR);
+                      setUseSourceCode(false);
+                    }}
+                    className="button-apple"
+                    style={{
+                      width: 'auto',
+                      padding: '12px 24px',
+                      backgroundColor: useImageOCR ? 'var(--apple-blue)' : 'var(--apple-gray)',
+                    }}
+                  >
+                    {useImageOCR ? t('botBypassButtonOCRActive') : `📷 ${t('botBypassButtonOCR')}`}
+                  </button>
+                </div>
+                <details style={{ fontSize: '14px', cursor: 'pointer', color: 'var(--apple-gray)' }}>
+                  <summary style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--apple-black)' }}>
+                    {t('botBypassExtensionInstall')}
+                  </summary>
+                  <div style={{ marginTop: '16px', marginBottom: '12px' }}>
+                    <a 
+                      href="/BROWSER_EXTENSION.zip" 
+                      download="BROWSER_EXTENSION.zip"
+                      className="button-apple button-primary-apple"
+                      style={{
+                        display: 'inline-block',
+                        width: 'auto',
+                        padding: '12px 24px',
+                        textDecoration: 'none',
+                        backgroundColor: '#34c759',
+                        marginBottom: '16px'
+                      }}
+                    >
+                      📥 {t('botBypassDownloadExtension')}
+                    </a>
+                  </div>
+                  <ol style={{ paddingLeft: '24px', lineHeight: '1.6', marginTop: '12px' }}>
+                    <li>{t('botBypassExtensionStep1')}</li>
+                    <li>{t('botBypassExtensionStep2').replace('chrome://extensions/', '')}<code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>chrome://extensions/</code></li>
+                    <li>{t('botBypassExtensionStep3')}</li>
+                    <li>{t('botBypassExtensionStep4')}</li>
+                    <li>{t('botBypassExtensionStep5')}</li>
+                  </ol>
+                </details>
+              </div>
+            )}
+          </div>
+
           <div className="form-section-apple">
             <h3 className="section-title-apple">⚙️ {t('generationSettingsLabel')}</h3>
             
@@ -923,7 +940,7 @@ function AppAdvanced() {
                     }
                   }}
                 />
-                <span>{t('includeLabelsText')}<br/><small style={{color: '#86868b'}}>{t('includeLabelsNote')}</small></span>
+                <span>{t('includeLabelsText')}</span>
               </label>
               
               {/* includeLabelsがtrueの場合のみ表示 */}
