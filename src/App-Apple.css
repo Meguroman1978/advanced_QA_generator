@@ -758,6 +758,69 @@ body {
   align-items: center;
 }
 
+/* ボット検知回避セクション */
+.bot-bypass-section-apple {
+  background: linear-gradient(135deg, #f0f7fa 0%, #e8f4f8 100%);
+  border: 2px solid #c5d9e0;
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 32px;
+}
+
+.bot-bypass-section-apple h3 {
+  color: #2c3e50;
+  font-size: 22px;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.bot-bypass-section-apple code {
+  background: var(--apple-bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.bot-bypass-section-apple details {
+  margin-top: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--apple-border);
+}
+
+.bot-bypass-section-apple summary {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.bot-bypass-section-apple summary:hover {
+  color: var(--apple-blue);
+}
+
+/* 画像OCRセクション */
+.image-ocr-section-apple h4 {
+  margin: 0 0 16px 0;
+}
+
+/* ソースコードセクション */
+.source-code-section-apple textarea {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.source-code-section-apple code {
+  background: var(--apple-bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
 /* レスポンシブ */
 @media (max-width: 768px) {
   .header-apple h1 {

@@ -72,6 +72,10 @@ function AppAdvanced() {
   const [language, setLanguage] = useState<Language>('ja');
   const [originalLanguage, setOriginalLanguage] = useState<Language>('ja');
   const [translatedVideoInfo, setTranslatedVideoInfo] = useState<Map<string, { videoReason?: string; videoExamples?: string[] }>>(new Map());
+  const [useSourceCode, setUseSourceCode] = useState(false);
+  const [sourceCodeInput, setSourceCodeInput] = useState('');
+  const [useImageOCR, setUseImageOCR] = useState(false);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
 
   // API URLを環境に応じて設定
   // VITE_API_URLが設定されている場合はそれを使用
@@ -93,6 +97,13 @@ function AppAdvanced() {
   const API_URL = getApiUrl();
   console.log('[API_URL] Final API_URL:', API_URL);
   const t = (key: Parameters<typeof getTranslation>[1]) => getTranslation(language, key);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setImageFiles(files);
+    }
+  };
 
   // 動画推奨情報を翻訳する関数
   const translateVideoInfo = async (text: string, fromLang: Language, toLang: Language): Promise<string> => {
@@ -199,11 +210,12 @@ function AppAdvanced() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate: At least one URL or source code is required
+    // Validate: At least one URL, source code, or images is required
     const hasValidUrl = config.urls.some(url => url && url.trim().length > 0);
-    const hasSourceCode = config.sourceCode && config.sourceCode.trim().length > 0;
+    const hasSourceCode = (config.sourceCode && config.sourceCode.trim().length > 0) || (sourceCodeInput && sourceCodeInput.trim().length > 0);
+    const hasImages = useImageOCR && imageFiles.length > 0;
     
-    if (!hasValidUrl && !hasSourceCode) {
+    if (!hasValidUrl && !hasSourceCode && !hasImages) {
       setError(t('errorInputRequired'));
       return;
     }
@@ -220,12 +232,72 @@ function AppAdvanced() {
       setProcessStage('collecting');
       await new Promise(resolve => setTimeout(resolve, 500));
 
+      // 画像OCRモードの場合
+      if (useImageOCR && imageFiles.length > 0) {
+        const formData = new FormData();
+        formData.append('url', config.urls[0] || '');
+        formData.append('maxQA', config.maxQA.toString());
+        formData.append('language', language);
+        imageFiles.forEach((file, index) => {
+          formData.append(`image${index}`, file);
+        });
+        
+        const response = await fetch(`${API_URL}/api/workflow-ocr`, {
+          method: 'POST',
+          headers: {
+            ...(tempApiKey && { 'X-Temp-API-Key': tempApiKey })
+          },
+          body: formData,
+        });
+
+        console.log('[OCR] Response status:', response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[OCR] Error response:', errorText);
+          throw new Error(`Server error: ${response.status} - ${errorText}`);
+        }
+
+        // Stage 2: 情報整理中
+        setProcessStage('organizing');
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const data = await response.json();
+        console.log('[OCR] Response data:', data);
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to process OCR workflow');
+        }
+
+        // Stage 3: Q&A生成中
+        setProcessStage('generating');
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        setResult(data.data);
+        setSessionId(Date.now().toString());
+        setOriginalLanguage(language);
+        setTranslatedVideoInfo(new Map());
+
+        // Stage 4: 完了
+        setProcessStage('completed');
+        setLoading(false);
+        return;
+      }
+
+      // 通常のモードまたはソースコード挿入モード
       const requestUrl = `${API_URL}/api/workflow`;
-      const requestBody = { 
+      const requestBody: any = { 
         url: config.urls[0],
         maxQA: config.maxQA,
         language: language
       };
+      
+      // ソースコード挿入モードの場合
+      if (useSourceCode && sourceCodeInput) {
+        requestBody.sourceCode = sourceCodeInput;
+      } else if (config.sourceCode) {
+        requestBody.sourceCode = config.sourceCode;
+      }
       
       console.log('[FETCH] Request URL:', requestUrl);
       console.log('[FETCH] Request body:', requestBody);
@@ -518,6 +590,166 @@ function AppAdvanced() {
               </select>
             </div>
           </div>
+
+          {/* ボット検知回避セクション */}
+          <div className="form-section-apple bot-bypass-section-apple">
+            <h3 className="section-title-apple">🔓 ボット検知を100%回避する方法</h3>
+            <p style={{ fontSize: '15px', marginBottom: '16px', color: 'var(--apple-gray)' }}>
+              <strong>Chrome拡張機能を使用した手順：</strong>
+            </p>
+            <ol style={{ fontSize: '14px', marginBottom: '20px', paddingLeft: '24px', lineHeight: '1.8', color: 'var(--apple-gray)' }}>
+              <li>ターゲットページで拡張機能を開く</li>
+              <li>「このページのHTMLを抽出」をクリック</li>
+              <li><strong>「HTMLをコピー」をクリック</strong></li>
+              <li>「Q&A Generator を開く」をクリック（このページが開く）</li>
+              <li>下の「ソースコード挿入を有効化」をクリック</li>
+              <li>オレンジ色のテキストエリアに<strong>貼り付け（Cmd+V）</strong></li>
+              <li>URLを入力して「Q&Aを生成」をクリック</li>
+            </ol>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setUseSourceCode(!useSourceCode);
+                  setUseImageOCR(false);
+                }}
+                className="button-apple"
+                style={{
+                  width: 'auto',
+                  padding: '12px 24px',
+                  backgroundColor: useSourceCode ? 'var(--apple-blue)' : '#34c759',
+                }}
+              >
+                {useSourceCode ? '✅ ソースコード挿入モード' : '📝 ソースコード挿入'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUseImageOCR(!useImageOCR);
+                  setUseSourceCode(false);
+                }}
+                className="button-apple"
+                style={{
+                  width: 'auto',
+                  padding: '12px 24px',
+                  backgroundColor: useImageOCR ? 'var(--apple-blue)' : 'var(--apple-gray)',
+                }}
+              >
+                {useImageOCR ? '✅ 画像OCRモード' : '📷 画像OCRモード'}
+              </button>
+            </div>
+            <details style={{ fontSize: '14px', cursor: 'pointer', color: 'var(--apple-gray)' }}>
+              <summary style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--apple-black)' }}>拡張機能のインストール方法を表示</summary>
+              <ol style={{ paddingLeft: '24px', lineHeight: '1.6', marginTop: '12px' }}>
+                <li>GitHubリポジトリの <code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>BROWSER_EXTENSION</code> フォルダをダウンロード</li>
+                <li>Chromeで <code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>chrome://extensions/</code> を開く</li>
+                <li>「デベロッパーモード」をON</li>
+                <li>「パッケージ化されていない拡張機能を読み込む」をクリック</li>
+                <li><code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>BROWSER_EXTENSION</code> フォルダを選択</li>
+              </ol>
+            </details>
+          </div>
+
+          {/* 画像OCRモード */}
+          {useImageOCR && (
+            <div className="form-section-apple image-ocr-section-apple" style={{
+              background: 'linear-gradient(135deg, #e3f2fd 0%, #e8f4f8 100%)',
+              border: '2px solid var(--apple-blue)',
+              padding: '24px',
+              borderRadius: '16px'
+            }}>
+              <h4 style={{ marginTop: 0, color: 'var(--apple-blue)', fontSize: '19px', fontWeight: '600' }}>📷 画像OCRモード（100%確実）</h4>
+              <p style={{ fontSize: '15px', marginBottom: '20px', lineHeight: '1.6', color: 'var(--apple-gray)' }}>
+                ページの<strong>スクリーンショット</strong>をアップロードしてください。<br/>
+                OCR技術で画像内のテキストを自動抽出してQ&Aを生成します。<br/>
+                <strong>メリット:</strong> ボット検知を完全回避、ログイン後のページにも対応
+              </p>
+              
+              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#fff3e0', borderRadius: '12px', fontSize: '14px' }}>
+                <strong style={{ color: '#1d1d1f' }}>📸 スクリーンショットの撮り方:</strong>
+                <ul style={{ marginTop: '8px', marginBottom: '0', paddingLeft: '24px', color: 'var(--apple-gray)' }}>
+                  <li><strong>Mac:</strong> Cmd + Shift + 4 （範囲選択）または Cmd + Shift + 3 （全画面）</li>
+                  <li><strong>Windows:</strong> Windows + Shift + S （範囲選択）または PrintScreen （全画面）</li>
+                  <li><strong>推奨:</strong> ページ全体をスクロールして複数枚撮影（最大10枚まで）</li>
+                </ul>
+              </div>
+
+              <label htmlFor="imageUpload" style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: 'var(--apple-blue)', fontSize: '15px' }}>
+                📁 画像ファイルをアップロード（PNG, JPEG, 最大10枚）:
+              </label>
+              <input
+                type="file"
+                id="imageUpload"
+                accept="image/*"
+                multiple
+                onChange={handleImageUpload}
+                style={{
+                  display: 'block',
+                  marginBottom: '16px',
+                  padding: '12px',
+                  border: '2px dashed var(--apple-blue)',
+                  borderRadius: '12px',
+                  width: '100%',
+                  cursor: 'pointer',
+                  backgroundColor: 'white'
+                }}
+              />
+              
+              {imageFiles.length > 0 && (
+                <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px' }}>
+                  <strong style={{ color: '#2e7d32', fontSize: '15px' }}>✅ アップロード済み: {imageFiles.length}枚</strong>
+                  <ul style={{ marginTop: '12px', fontSize: '14px', paddingLeft: '24px', color: 'var(--apple-gray)' }}>
+                    {imageFiles.map((file, index) => (
+                      <li key={index}>{file.name} ({(file.size / 1024).toFixed(2)} KB)</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ソースコード挿入モード */}
+          {useSourceCode && (
+            <div className="form-section-apple source-code-section-apple" style={{
+              background: 'linear-gradient(135deg, #fff3e0 0%, #fff8e1 100%)',
+              border: '2px solid #ff9500',
+              padding: '24px',
+              borderRadius: '16px'
+            }}>
+              <label htmlFor="sourceCode" style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: '#e65100', fontSize: '15px' }}>
+                📋 HTMLソースコード（Chrome拡張機能でコピーしたHTMLを貼り付け）:
+              </label>
+              <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: '#fff8e1', borderRadius: '12px', fontSize: '14px' }}>
+                <strong style={{ color: '#1d1d1f' }}>貼り付け方法:</strong> テキストエリア内をクリック → <code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>Cmd+V</code> (Mac) または <code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>Ctrl+V</code> (Windows)
+              </div>
+              <textarea
+                id="sourceCode"
+                value={sourceCodeInput}
+                onChange={(e) => setSourceCodeInput(e.target.value)}
+                placeholder="1. Chrome拡張機能で「HTMLをコピー」をクリック
+2. ここをクリック
+3. Cmd+V（Mac）または Ctrl+V（Windows）で貼り付け
+
+HTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコードが表示されます"
+                style={{
+                  width: '100%',
+                  minHeight: '250px',
+                  padding: '16px',
+                  fontFamily: 'monospace',
+                  fontSize: '13px',
+                  borderRadius: '12px',
+                  border: sourceCodeInput ? '2px solid #4caf50' : '2px dashed #ff9500',
+                  backgroundColor: sourceCodeInput ? '#f1f8e9' : 'white',
+                  boxSizing: 'border-box'
+                }}
+              />
+              {sourceCodeInput && (
+                <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px', fontSize: '14px', color: '#2e7d32' }}>
+                  ✅ HTMLが貼り付けられました（{(sourceCodeInput.length / 1024).toFixed(2)} KB）
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="form-section-apple">
             <h3 className="section-title-apple">🔗 {t('urlLabel')}</h3>
