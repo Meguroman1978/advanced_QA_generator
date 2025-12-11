@@ -1080,13 +1080,18 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
     console.log('  - language (parsed):', language, 'type:', typeof language);
     console.log('  - sourceCode provided:', !!sourceCode, 'length:', sourceCode?.length || 0);
 
-    if (!url) {
-      console.log('Error: URL is missing');
+    // URLまたはソースコードが必要（どちらか一方でOK）
+    if (!url && !sourceCode) {
+      console.log('Error: URL or sourceCode is required');
       return res.status(400).json({
         success: false,
-        error: 'URL is required'
+        error: 'URL or source code is required'
       });
     }
+    
+    // ソースコードのみの場合、URLをダミーに設定
+    const effectiveUrl = url || 'source-code-input';
+    console.log('Effective URL:', effectiveUrl);
 
     // 診断情報を収集
     const diagnostics = {
@@ -1106,6 +1111,7 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
     if (sourceCode) {
       // Browser extensionから受信したHTMLを使用
       console.log('✅ Using HTML from browser extension (bypasses all bot detection)');
+      console.log('  - Source code length:', sourceCode.length, 'characters');
       html = sourceCode;
       diagnostics.htmlLength = html.length;
       
@@ -1113,8 +1119,9 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       if (titleMatch) {
         diagnostics.pageTitle = titleMatch[1];
+        console.log('  - Page title:', titleMatch[1]);
       }
-    } else {
+    } else if (url) {
       // 通常のフェッチ処理
       console.log('Fetching website:', url);
       try {
@@ -1145,7 +1152,8 @@ app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Res
 
     // ステップ3: OpenAI APIで複数のQ&Aを生成
     console.log(`[GENERATION] Starting Q&A generation with maxQA=${maxQA}, language=${language}`);
-    const qaList = await generateQA(extractedContent, maxQA, language, url);
+    console.log(`[GENERATION] Content length: ${extractedContent.length} characters`);
+    const qaList = await generateQA(extractedContent, maxQA, language, effectiveUrl);
     console.log(`[GENERATION] Generated ${qaList.length} Q&A items`);
 
     // 動画推奨が必要かどうかを判定する関数
@@ -1389,9 +1397,9 @@ Example2: [Specific video title example 2]
 // PDFエクスポートエンドポイント（シンプル版）
 app.post('/api/export/single', async (req: Request, res: Response) => {
   try {
-    const { qaItems, format, includeVideoInfo = false } = req.body;
+    const { qaItems, format, includeLabels = false, includeVideoInfo = false } = req.body;
     
-    console.log(`📥 Export request received: format=${format}, items=${qaItems?.length}, includeVideoInfo=${includeVideoInfo}`);
+    console.log(`📥 Export request received: format=${format}, items=${qaItems?.length}, includeLabels=${includeLabels}, includeVideoInfo=${includeVideoInfo}`);
     console.log(`📋 Request headers:`, req.headers['content-type']);
     
     if (!qaItems || !Array.isArray(qaItems) || qaItems.length === 0) {
@@ -1486,28 +1494,32 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
           doc.moveDown(0.5);
           doc.fontSize(12).fillColor('black').text(`A: ${item.answer}`);
           
-          // ラベル情報（includeVideoInfoがtrueの場合のみ出力）
-          if (includeVideoInfo) {
+          // ラベル情報とビデオ情報の出力
+          const shouldShowLabels = includeLabels || includeVideoInfo;
+          if (shouldShowLabels) {
             doc.moveDown(0.5);
             doc.fontSize(9).fillColor('gray').text('─────────────────');
             
-            // ソース情報
-            if (item.source) {
-              doc.fontSize(9).fillColor('gray').text(`📌 ソース: ${item.source}`);
+            // ラベル情報（includeLabelsがtrueの場合のみ）
+            if (includeLabels) {
+              // ソース情報
+              if (item.source) {
+                doc.fontSize(9).fillColor('gray').text(`📌 ソース: ${item.source}`);
+              }
+              
+              // 情報源タイプ
+              if (item.sourceType) {
+                doc.fontSize(9).fillColor('gray').text(`📂 情報源タイプ: ${item.sourceType}`);
+              }
+              
+              // URL（もし存在すれば）
+              if (item.url) {
+                doc.fontSize(9).fillColor('gray').text(`🔗 URL: ${item.url}`);
+              }
             }
             
-            // 情報源タイプ
-            if (item.sourceType) {
-              doc.fontSize(9).fillColor('gray').text(`📂 情報源タイプ: ${item.sourceType}`);
-            }
-            
-            // URL（もし存在すれば）
-            if (item.url) {
-              doc.fontSize(9).fillColor('gray').text(`🔗 URL: ${item.url}`);
-            }
-            
-            // 動画推奨情報
-            if (item.needsVideo) {
+            // 動画推奨情報（includeVideoInfoがtrueの場合のみ）
+            if (includeVideoInfo && item.needsVideo) {
               doc.fontSize(9).fillColor('red').text('🎥 推奨動画作成例');
               if (item.videoReason) {
                 doc.fontSize(9).fillColor('gray').text(`  理由: ${item.videoReason}`);
@@ -1545,27 +1557,31 @@ app.post('/api/export/single', async (req: Request, res: Response) => {
         textContent += `Q${index + 1}: ${item.question}\n`;
         textContent += `A${index + 1}: ${item.answer}\n`;
         
-        // ラベル情報（includeVideoInfoがtrueの場合のみ出力）
-        if (includeVideoInfo) {
+        // ラベル情報とビデオ情報の出力
+        const shouldShowLabels = includeLabels || includeVideoInfo;
+        if (shouldShowLabels) {
           textContent += '\n─────────────────\n';
           
-          // ソース情報
-          if (item.source) {
-            textContent += `📌 ソース: ${item.source}\n`;
+          // ラベル情報（includeLabelsがtrueの場合のみ）
+          if (includeLabels) {
+            // ソース情報
+            if (item.source) {
+              textContent += `📌 ソース: ${item.source}\n`;
+            }
+            
+            // 情報源タイプ
+            if (item.sourceType) {
+              textContent += `📂 情報源タイプ: ${item.sourceType}\n`;
+            }
+            
+            // URL（もし存在すれば）
+            if (item.url) {
+              textContent += `🔗 URL: ${item.url}\n`;
+            }
           }
           
-          // 情報源タイプ
-          if (item.sourceType) {
-            textContent += `📂 情報源タイプ: ${item.sourceType}\n`;
-          }
-          
-          // URL（もし存在すれば）
-          if (item.url) {
-            textContent += `🔗 URL: ${item.url}\n`;
-          }
-          
-          // 動画推奨情報
-          if (item.needsVideo) {
+          // 動画推奨情報（includeVideoInfoがtrueの場合のみ）
+          if (includeVideoInfo && item.needsVideo) {
             textContent += `🎥 推奨動画作成例\n`;
             if (item.videoReason) {
               textContent += `  理由: ${item.videoReason}\n`;
@@ -1693,10 +1709,13 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
       });
     }
     
-    // Q&A生成
+    // Q&A生成（リクエストからmaxQAとlanguageを取得）
+    const maxQA = req.body.maxQA ? parseInt(req.body.maxQA, 10) : 40;
+    const language = req.body.language || 'ja';
     console.log('\n🤖 Q&A生成を開始...');
-    const maxQA = 5;
-    const language = 'ja';
+    console.log('  - maxQA:', maxQA);
+    console.log('  - language:', language);
+    console.log('  - Combined text length:', combinedText.length, 'characters');
     const qaList = await generateQA(combinedText, maxQA, language, url);
     console.log(`✅ ${qaList.length}個のQ&Aを生成しました`);
     
