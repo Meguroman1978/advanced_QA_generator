@@ -512,12 +512,48 @@ async function fetchWebsite(url: string): Promise<string> {
 function extractContent(html: string): string {
   const $ = cheerio.load(html);
   
-  console.log('🔍 Extracting content with PRODUCT-FIRST algorithm (top-down priority)...');
+  console.log('🔍 Extracting content with JSON-LD + PRODUCT-FIRST algorithm...');
   console.log(`📄 Original HTML length: ${html.length} bytes`);
   
   // デバッグ: タイトルを確認
   const pageTitle = $('title').text();
   console.log(`📌 Page title: ${pageTitle}`);
+  
+  // 【ステップ0】JSON-LD構造化データを優先的に抽出（最優先）
+  let jsonLdContent = '';
+  $('script[type="application/ld+json"]').each((_, elem) => {
+    try {
+      const jsonText = $(elem).html();
+      if (jsonText) {
+        const jsonData = JSON.parse(jsonText);
+        // Productタイプのみを抽出
+        if (jsonData['@type'] === 'Product') {
+          console.log('✅ Found Product JSON-LD data');
+          const product = jsonData;
+          jsonLdContent += `商品名: ${product.name || ''}\n`;
+          jsonLdContent += `説明: ${product.description || ''}\n`;
+          jsonLdContent += `カテゴリ: ${product.category || ''}\n`;
+          jsonLdContent += `ブランド: ${product.brand?.name || ''}\n`;
+          jsonLdContent += `価格: ${product.offers?.price || ''}円\n`;
+          jsonLdContent += `サイズ: ${product.size?.name || ''}\n`;
+          jsonLdContent += `色: ${product.color || ''}\n`;
+          jsonLdContent += `SKU: ${product.sku || ''}\n`;
+          jsonLdContent += `在庫状況: ${product.offers?.availability?.includes('InStock') ? '在庫あり' : ''}\n`;
+          console.log('📦 JSON-LD product info extracted:', jsonLdContent.length, 'chars');
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Failed to parse JSON-LD:', err);
+    }
+  });
+  
+  // JSON-LDが見つかった場合、これを優先的に使用
+  if (jsonLdContent.length > 100) {
+    console.log('✅ Using JSON-LD as primary content source');
+    return jsonLdContent;
+  }
+  
+  console.log('⚠️ No usable JSON-LD found, falling back to HTML extraction');
   
   // 【ステップ1】ノイズとなる要素を徹底的に削除（商品情報以外を全て除外）
   
