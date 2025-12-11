@@ -163,6 +163,46 @@ export const translations = {
     errorSaveFailed: '保存に失敗しました',
     errorDeleteFailed: '削除に失敗しました',
     errorInputRequired: 'URLまたはソースコードを入力してください',
+    
+    // ボット検知回避
+    botBypassTitle: 'ボット検知を100%回避する方法',
+    botBypassShow: '表示する',
+    botBypassHide: '非表示にする',
+    botBypassInstructions: 'Chrome拡張機能を使用した手順：',
+    botBypassStep1: 'ターゲットページで拡張機能を開く',
+    botBypassStep2: '「このページのHTMLを抽出」をクリック',
+    botBypassStep3: '「HTMLをコピー」をクリック',
+    botBypassStep4: '「Q&A Generator を開く」をクリック（このページが開く）',
+    botBypassStep5: '下の「ソースコード挿入を有効化」をクリック',
+    botBypassStep6: 'オレンジ色のテキストエリアに貼り付け（Cmd+V）',
+    botBypassStep7: 'URLを入力して「Q&Aを生成」をクリック',
+    botBypassButtonSourceCode: 'ソースコード挿入',
+    botBypassButtonSourceCodeActive: '✅ ソースコード挿入モード',
+    botBypassButtonOCR: '画像OCRモード',
+    botBypassButtonOCRActive: '✅ 画像OCRモード',
+    botBypassExtensionInstall: '拡張機能のインストール方法を表示',
+    botBypassExtensionStep1: 'GitHubリポジトリの BROWSER_EXTENSION フォルダをダウンロード',
+    botBypassExtensionStep2: 'Chromeで chrome://extensions/ を開く',
+    botBypassExtensionStep3: '「デベロッパーモード」をON',
+    botBypassExtensionStep4: '「パッケージ化されていない拡張機能を読み込む」をクリック',
+    botBypassExtensionStep5: 'BROWSER_EXTENSION フォルダを選択',
+    
+    // 画像OCRモード
+    ocrModeTitle: '画像OCRモード（100%確実）',
+    ocrModeDescription: 'ページのスクリーンショットをアップロードしてください。OCR技術で画像内のテキストを自動抽出してQ&Aを生成します。',
+    ocrModeBenefit: 'メリット: ボット検知を完全回避、ログイン後のページにも対応',
+    ocrScreenshotTitle: 'スクリーンショットの撮り方:',
+    ocrScreenshotMac: 'Mac: Cmd + Shift + 4（範囲選択）または Cmd + Shift + 3（全画面）',
+    ocrScreenshotWindows: 'Windows: Windows + Shift + S（範囲選択）または PrintScreen（全画面）',
+    ocrScreenshotRecommend: '推奨: ページ全体をスクロールして複数枚撮影（最大10枚まで）',
+    ocrUploadLabel: '画像ファイルをアップロード（PNG, JPEG, 最大10枚）:',
+    ocrUploadedLabel: 'アップロード済み: {count}枚',
+    
+    // ソースコード挿入モード
+    sourceCodeModeTitle: 'HTMLソースコード（Chrome拡張機能でコピーしたHTMLを貼り付け）:',
+    sourceCodeModePasteInstructions: '貼り付け方法: テキストエリア内をクリック → Cmd+V (Mac) または Ctrl+V (Windows)',
+    sourceCodeModePlaceholder: '1. Chrome拡張機能で「HTMLをコピー」をクリック\n2. ここをクリック\n3. Cmd+V（Mac）または Ctrl+V（Windows）で貼り付け\n\nHTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコードが表示されます',
+    sourceCodeModePasted: 'HTMLが貼り付けられました（{size} KB）',
   },
   
   en: {
@@ -326,6 +366,46 @@ export const translations = {
     errorSaveFailed: 'Save failed',
     errorDeleteFailed: 'Delete failed',
     errorInputRequired: 'Please enter URL or source code',
+    
+    // Bot Detection Bypass
+    botBypassTitle: '100% Bot Detection Bypass Method',
+    botBypassShow: 'Show',
+    botBypassHide: 'Hide',
+    botBypassInstructions: 'Steps using Chrome Extension:',
+    botBypassStep1: 'Open extension on target page',
+    botBypassStep2: 'Click "Extract HTML from this page"',
+    botBypassStep3: 'Click "Copy HTML"',
+    botBypassStep4: 'Click "Open Q&A Generator" (opens this page)',
+    botBypassStep5: 'Click "Enable source code insertion" below',
+    botBypassStep6: 'Paste into orange text area (Cmd+V)',
+    botBypassStep7: 'Enter URL and click "Generate Q&A"',
+    botBypassButtonSourceCode: 'Source Code Insertion',
+    botBypassButtonSourceCodeActive: '✅ Source Code Insertion Mode',
+    botBypassButtonOCR: 'Image OCR Mode',
+    botBypassButtonOCRActive: '✅ Image OCR Mode',
+    botBypassExtensionInstall: 'Show extension installation instructions',
+    botBypassExtensionStep1: 'Download BROWSER_EXTENSION folder from GitHub repository',
+    botBypassExtensionStep2: 'Open chrome://extensions/ in Chrome',
+    botBypassExtensionStep3: 'Turn ON "Developer mode"',
+    botBypassExtensionStep4: 'Click "Load unpacked extension"',
+    botBypassExtensionStep5: 'Select BROWSER_EXTENSION folder',
+    
+    // Image OCR Mode
+    ocrModeTitle: 'Image OCR Mode (100% Reliable)',
+    ocrModeDescription: 'Upload page screenshots. OCR technology automatically extracts text from images to generate Q&A.',
+    ocrModeBenefit: 'Benefits: Complete bot detection bypass, compatible with pages requiring login',
+    ocrScreenshotTitle: 'How to take screenshots:',
+    ocrScreenshotMac: 'Mac: Cmd + Shift + 4 (selection) or Cmd + Shift + 3 (full screen)',
+    ocrScreenshotWindows: 'Windows: Windows + Shift + S (selection) or PrintScreen (full screen)',
+    ocrScreenshotRecommend: 'Recommended: Scroll and capture multiple screenshots (up to 10)',
+    ocrUploadLabel: 'Upload image files (PNG, JPEG, up to 10):',
+    ocrUploadedLabel: 'Uploaded: {count} file(s)',
+    
+    // Source Code Insertion Mode
+    sourceCodeModeTitle: 'HTML Source Code (Paste HTML copied from Chrome extension):',
+    sourceCodeModePasteInstructions: 'How to paste: Click in text area → Cmd+V (Mac) or Ctrl+V (Windows)',
+    sourceCodeModePlaceholder: '1. Click "Copy HTML" in Chrome extension\n2. Click here\n3. Paste with Cmd+V (Mac) or Ctrl+V (Windows)\n\nOnce HTML is pasted, code like <!DOCTYPE html>... will appear here',
+    sourceCodeModePasted: 'HTML pasted ({size} KB)',
   },
   
   zh: {
@@ -489,6 +569,46 @@ export const translations = {
     errorSaveFailed: '保存失败',
     errorDeleteFailed: '删除失败',
     errorInputRequired: '请输入网址或源代码',
+    
+    // 机器人检测绕过
+    botBypassTitle: '100%绕过机器人检测的方法',
+    botBypassShow: '显示',
+    botBypassHide: '隐藏',
+    botBypassInstructions: '使用Chrome扩展程序的步骤：',
+    botBypassStep1: '在目标页面打开扩展程序',
+    botBypassStep2: '点击"提取此页面的HTML"',
+    botBypassStep3: '点击"复制HTML"',
+    botBypassStep4: '点击"打开问答生成器"（打开此页面）',
+    botBypassStep5: '点击下方的"启用源代码插入"',
+    botBypassStep6: '粘贴到橙色文本区域（Cmd+V）',
+    botBypassStep7: '输入网址并点击"生成问答"',
+    botBypassButtonSourceCode: '源代码插入',
+    botBypassButtonSourceCodeActive: '✅ 源代码插入模式',
+    botBypassButtonOCR: '图像OCR模式',
+    botBypassButtonOCRActive: '✅ 图像OCR模式',
+    botBypassExtensionInstall: '显示扩展程序安装说明',
+    botBypassExtensionStep1: '从GitHub仓库下载 BROWSER_EXTENSION 文件夹',
+    botBypassExtensionStep2: '在Chrome中打开 chrome://extensions/',
+    botBypassExtensionStep3: '开启"开发者模式"',
+    botBypassExtensionStep4: '点击"加载已解压的扩展程序"',
+    botBypassExtensionStep5: '选择 BROWSER_EXTENSION 文件夹',
+    
+    // 图像OCR模式
+    ocrModeTitle: '图像OCR模式（100%可靠）',
+    ocrModeDescription: '上传页面截图。OCR技术自动从图像中提取文本以生成问答。',
+    ocrModeBenefit: '优势：完全绕过机器人检测，兼容需要登录的页面',
+    ocrScreenshotTitle: '如何截图：',
+    ocrScreenshotMac: 'Mac：Cmd + Shift + 4（选择）或 Cmd + Shift + 3（全屏）',
+    ocrScreenshotWindows: 'Windows：Windows + Shift + S（选择）或 PrintScreen（全屏）',
+    ocrScreenshotRecommend: '建议：滚动并捕获多张截图（最多10张）',
+    ocrUploadLabel: '上传图像文件（PNG、JPEG，最多10张）：',
+    ocrUploadedLabel: '已上传：{count}个文件',
+    
+    // 源代码插入模式
+    sourceCodeModeTitle: 'HTML源代码（粘贴从Chrome扩展程序复制的HTML）：',
+    sourceCodeModePasteInstructions: '如何粘贴：点击文本区域 → Cmd+V（Mac）或 Ctrl+V（Windows）',
+    sourceCodeModePlaceholder: '1. 在Chrome扩展程序中点击"复制HTML"\n2. 点击此处\n3. 使用Cmd+V（Mac）或Ctrl+V（Windows）粘贴\n\n粘贴HTML后，此处将显示类似 <!DOCTYPE html>... 的代码',
+    sourceCodeModePasted: '已粘贴HTML（{size} KB）',
   }
 };
 

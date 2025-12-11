@@ -76,6 +76,7 @@ function AppAdvanced() {
   const [sourceCodeInput, setSourceCodeInput] = useState('');
   const [useImageOCR, setUseImageOCR] = useState(false);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [botBypassOpen, setBotBypassOpen] = useState(false);
 
   // API URLを環境に応じて設定
   // VITE_API_URLが設定されている場合はそれを使用
@@ -593,61 +594,84 @@ function AppAdvanced() {
 
           {/* ボット検知回避セクション */}
           <div className="form-section-apple bot-bypass-section-apple">
-            <h3 className="section-title-apple">🔓 ボット検知を100%回避する方法</h3>
-            <p style={{ fontSize: '15px', marginBottom: '16px', color: 'var(--apple-gray)' }}>
-              <strong>Chrome拡張機能を使用した手順：</strong>
-            </p>
-            <ol style={{ fontSize: '14px', marginBottom: '20px', paddingLeft: '24px', lineHeight: '1.8', color: 'var(--apple-gray)' }}>
-              <li>ターゲットページで拡張機能を開く</li>
-              <li>「このページのHTMLを抽出」をクリック</li>
-              <li><strong>「HTMLをコピー」をクリック</strong></li>
-              <li>「Q&A Generator を開く」をクリック（このページが開く）</li>
-              <li>下の「ソースコード挿入を有効化」をクリック</li>
-              <li>オレンジ色のテキストエリアに<strong>貼り付け（Cmd+V）</strong></li>
-              <li>URLを入力して「Q&Aを生成」をクリック</li>
-            </ol>
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setUseSourceCode(!useSourceCode);
-                  setUseImageOCR(false);
-                }}
-                className="button-apple"
-                style={{
-                  width: 'auto',
-                  padding: '12px 24px',
-                  backgroundColor: useSourceCode ? 'var(--apple-blue)' : '#34c759',
-                }}
-              >
-                {useSourceCode ? '✅ ソースコード挿入モード' : '📝 ソースコード挿入'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setUseImageOCR(!useImageOCR);
-                  setUseSourceCode(false);
-                }}
-                className="button-apple"
-                style={{
-                  width: 'auto',
-                  padding: '12px 24px',
-                  backgroundColor: useImageOCR ? 'var(--apple-blue)' : 'var(--apple-gray)',
-                }}
-              >
-                {useImageOCR ? '✅ 画像OCRモード' : '📷 画像OCRモード'}
-              </button>
+            <div 
+              onClick={() => setBotBypassOpen(!botBypassOpen)}
+              style={{ 
+                cursor: 'pointer', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                userSelect: 'none'
+              }}
+            >
+              <h3 className="section-title-apple" style={{ margin: 0 }}>
+                🔓 {t('botBypassTitle')}
+              </h3>
+              <span style={{ fontSize: '20px', color: 'var(--apple-gray)', transition: 'transform 0.3s', transform: botBypassOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                ▼
+              </span>
             </div>
-            <details style={{ fontSize: '14px', cursor: 'pointer', color: 'var(--apple-gray)' }}>
-              <summary style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--apple-black)' }}>拡張機能のインストール方法を表示</summary>
-              <ol style={{ paddingLeft: '24px', lineHeight: '1.6', marginTop: '12px' }}>
-                <li>GitHubリポジトリの <code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>BROWSER_EXTENSION</code> フォルダをダウンロード</li>
-                <li>Chromeで <code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>chrome://extensions/</code> を開く</li>
-                <li>「デベロッパーモード」をON</li>
-                <li>「パッケージ化されていない拡張機能を読み込む」をクリック</li>
-                <li><code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>BROWSER_EXTENSION</code> フォルダを選択</li>
-              </ol>
-            </details>
+            
+            {botBypassOpen && (
+              <div style={{ marginTop: '20px', animation: 'fadeIn 0.3s ease-out' }}>
+                <p style={{ fontSize: '15px', marginBottom: '16px', color: 'var(--apple-gray)' }}>
+                  <strong>{t('botBypassInstructions')}</strong>
+                </p>
+                <ol style={{ fontSize: '14px', marginBottom: '20px', paddingLeft: '24px', lineHeight: '1.8', color: 'var(--apple-gray)' }}>
+                  <li>{t('botBypassStep1')}</li>
+                  <li>{t('botBypassStep2')}</li>
+                  <li><strong>{t('botBypassStep3')}</strong></li>
+                  <li>{t('botBypassStep4')}</li>
+                  <li>{t('botBypassStep5')}</li>
+                  <li><strong>{t('botBypassStep6')}</strong></li>
+                  <li>{t('botBypassStep7')}</li>
+                </ol>
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseSourceCode(!useSourceCode);
+                      setUseImageOCR(false);
+                    }}
+                    className="button-apple"
+                    style={{
+                      width: 'auto',
+                      padding: '12px 24px',
+                      backgroundColor: useSourceCode ? 'var(--apple-blue)' : '#34c759',
+                    }}
+                  >
+                    {useSourceCode ? t('botBypassButtonSourceCodeActive') : `📝 ${t('botBypassButtonSourceCode')}`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseImageOCR(!useImageOCR);
+                      setUseSourceCode(false);
+                    }}
+                    className="button-apple"
+                    style={{
+                      width: 'auto',
+                      padding: '12px 24px',
+                      backgroundColor: useImageOCR ? 'var(--apple-blue)' : 'var(--apple-gray)',
+                    }}
+                  >
+                    {useImageOCR ? t('botBypassButtonOCRActive') : `📷 ${t('botBypassButtonOCR')}`}
+                  </button>
+                </div>
+                <details style={{ fontSize: '14px', cursor: 'pointer', color: 'var(--apple-gray)' }}>
+                  <summary style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--apple-black)' }}>
+                    {t('botBypassExtensionInstall')}
+                  </summary>
+                  <ol style={{ paddingLeft: '24px', lineHeight: '1.6', marginTop: '12px' }}>
+                    <li>{t('botBypassExtensionStep1').replace('BROWSER_EXTENSION', '')}<code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>BROWSER_EXTENSION</code>{t('botBypassExtensionStep1').includes('フォルダ') ? 'フォルダ' : t('botBypassExtensionStep1').includes('folder') ? ' folder' : '文件夹'}</li>
+                    <li>{t('botBypassExtensionStep2').replace('chrome://extensions/', '')}<code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>chrome://extensions/</code></li>
+                    <li>{t('botBypassExtensionStep3')}</li>
+                    <li>{t('botBypassExtensionStep4')}</li>
+                    <li>{t('botBypassExtensionStep5').replace('BROWSER_EXTENSION', '')}<code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>BROWSER_EXTENSION</code>{t('botBypassExtensionStep5').includes('フォルダ') ? 'フォルダ' : t('botBypassExtensionStep5').includes('folder') ? ' folder' : '文件夹'}</li>
+                  </ol>
+                </details>
+              </div>
+            )}
           </div>
 
           {/* 画像OCRモード */}
@@ -658,24 +682,25 @@ function AppAdvanced() {
               padding: '24px',
               borderRadius: '16px'
             }}>
-              <h4 style={{ marginTop: 0, color: 'var(--apple-blue)', fontSize: '19px', fontWeight: '600' }}>📷 画像OCRモード（100%確実）</h4>
+              <h4 style={{ marginTop: 0, color: 'var(--apple-blue)', fontSize: '19px', fontWeight: '600' }}>
+                📷 {t('ocrModeTitle')}
+              </h4>
               <p style={{ fontSize: '15px', marginBottom: '20px', lineHeight: '1.6', color: 'var(--apple-gray)' }}>
-                ページの<strong>スクリーンショット</strong>をアップロードしてください。<br/>
-                OCR技術で画像内のテキストを自動抽出してQ&Aを生成します。<br/>
-                <strong>メリット:</strong> ボット検知を完全回避、ログイン後のページにも対応
+                {t('ocrModeDescription')}<br/>
+                <strong>{t('ocrModeBenefit')}</strong>
               </p>
               
               <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#fff3e0', borderRadius: '12px', fontSize: '14px' }}>
-                <strong style={{ color: '#1d1d1f' }}>📸 スクリーンショットの撮り方:</strong>
+                <strong style={{ color: '#1d1d1f' }}>📸 {t('ocrScreenshotTitle')}</strong>
                 <ul style={{ marginTop: '8px', marginBottom: '0', paddingLeft: '24px', color: 'var(--apple-gray)' }}>
-                  <li><strong>Mac:</strong> Cmd + Shift + 4 （範囲選択）または Cmd + Shift + 3 （全画面）</li>
-                  <li><strong>Windows:</strong> Windows + Shift + S （範囲選択）または PrintScreen （全画面）</li>
-                  <li><strong>推奨:</strong> ページ全体をスクロールして複数枚撮影（最大10枚まで）</li>
+                  <li>{t('ocrScreenshotMac')}</li>
+                  <li>{t('ocrScreenshotWindows')}</li>
+                  <li><strong>{t('ocrScreenshotRecommend')}</strong></li>
                 </ul>
               </div>
 
               <label htmlFor="imageUpload" style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: 'var(--apple-blue)', fontSize: '15px' }}>
-                📁 画像ファイルをアップロード（PNG, JPEG, 最大10枚）:
+                📁 {t('ocrUploadLabel')}
               </label>
               <input
                 type="file"
@@ -697,7 +722,9 @@ function AppAdvanced() {
               
               {imageFiles.length > 0 && (
                 <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px' }}>
-                  <strong style={{ color: '#2e7d32', fontSize: '15px' }}>✅ アップロード済み: {imageFiles.length}枚</strong>
+                  <strong style={{ color: '#2e7d32', fontSize: '15px' }}>
+                    ✅ {t('ocrUploadedLabel').replace('{count}', imageFiles.length.toString())}
+                  </strong>
                   <ul style={{ marginTop: '12px', fontSize: '14px', paddingLeft: '24px', color: 'var(--apple-gray)' }}>
                     {imageFiles.map((file, index) => (
                       <li key={index}>{file.name} ({(file.size / 1024).toFixed(2)} KB)</li>
@@ -717,20 +744,16 @@ function AppAdvanced() {
               borderRadius: '16px'
             }}>
               <label htmlFor="sourceCode" style={{ display: 'block', marginBottom: '12px', fontWeight: '600', color: '#e65100', fontSize: '15px' }}>
-                📋 HTMLソースコード（Chrome拡張機能でコピーしたHTMLを貼り付け）:
+                📋 {t('sourceCodeModeTitle')}
               </label>
               <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: '#fff8e1', borderRadius: '12px', fontSize: '14px' }}>
-                <strong style={{ color: '#1d1d1f' }}>貼り付け方法:</strong> テキストエリア内をクリック → <code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>Cmd+V</code> (Mac) または <code style={{ background: 'var(--apple-bg)', padding: '2px 6px', borderRadius: '4px' }}>Ctrl+V</code> (Windows)
+                <strong style={{ color: '#1d1d1f' }}>{t('sourceCodeModePasteInstructions')}</strong>
               </div>
               <textarea
                 id="sourceCode"
                 value={sourceCodeInput}
                 onChange={(e) => setSourceCodeInput(e.target.value)}
-                placeholder="1. Chrome拡張機能で「HTMLをコピー」をクリック
-2. ここをクリック
-3. Cmd+V（Mac）または Ctrl+V（Windows）で貼り付け
-
-HTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコードが表示されます"
+                placeholder={t('sourceCodeModePlaceholder')}
                 style={{
                   width: '100%',
                   minHeight: '250px',
@@ -745,7 +768,7 @@ HTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコ�
               />
               {sourceCodeInput && (
                 <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#e8f5e9', borderRadius: '12px', fontSize: '14px', color: '#2e7d32' }}>
-                  ✅ HTMLが貼り付けられました（{(sourceCodeInput.length / 1024).toFixed(2)} KB）
+                  ✅ {t('sourceCodeModePasted').replace('{size}', (sourceCodeInput.length / 1024).toFixed(2))}
                 </div>
               )}
             </div>
@@ -766,7 +789,7 @@ HTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコ�
                   setConfig({ ...config, urls: newUrls });
                 }}
                 placeholder={t('urlPlaceholder')}
-                disabled={loading || !!(config.sourceCode && config.sourceCode.length > 0)}
+                disabled={loading}
               />
             </div>
 
@@ -782,7 +805,7 @@ HTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコ�
                   setConfig({ ...config, urls: newUrls });
                 }}
                 placeholder={t('urlPlaceholder')}
-                disabled={loading || !!(config.sourceCode && config.sourceCode.length > 0)}
+                disabled={loading}
               />
             </div>
 
@@ -798,7 +821,7 @@ HTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコ�
                   setConfig({ ...config, urls: newUrls });
                 }}
                 placeholder={t('urlPlaceholder')}
-                disabled={loading || !!(config.sourceCode && config.sourceCode.length > 0)}
+                disabled={loading}
               />
             </div>
 
@@ -808,24 +831,11 @@ HTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコ�
                 id="scope"
                 value={config.scope}
                 onChange={(e) => setConfig({ ...config, scope: e.target.value as 'single' | 'subdomain' })}
-                disabled={loading || !!(config.sourceCode && config.sourceCode.length > 0)}
+                disabled={loading || useSourceCode || useImageOCR}
               >
                 <option value="single">{t('scopeSingle')}</option>
                 <option value="subdomain">{t('scopeSubdomain')}</option>
               </select>
-            </div>
-
-            <div className="input-group-apple">
-              <label htmlFor="sourceCode">{t('sourceCodeLabel')}:</label>
-              <textarea
-                id="sourceCode"
-                value={config.sourceCode}
-                onChange={(e) => setConfig({ ...config, sourceCode: e.target.value })}
-                placeholder={t('sourceCodePlaceholder')}
-                rows={4}
-                disabled={loading}
-              />
-              <small>{t('sourceCodeNote')}</small>
             </div>
           </div>
 
