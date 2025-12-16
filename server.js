@@ -741,7 +741,7 @@ async function extractTextFromImage(imageBuffer) {
         throw new Error(`OCR処理に失敗しました: ${error}`);
     }
 }
-async function generateQA(content, maxQA = 5, language = 'ja', productUrl, isOCRMode = false) {
+async function generateQA(content, maxQA = 5, language = 'ja', productUrl, isOCRMode = false, qaType = 'collected') {
     const apiKey = process.env.OPENAI_API_KEY;
     console.log('API Key check:', apiKey ? `Found (length: ${apiKey.length})` : 'NOT FOUND');
     console.log('Generating Q&A:', { maxQA, language, contentLength: content.length });
@@ -766,6 +766,12 @@ async function generateQA(content, maxQA = 5, language = 'ja', productUrl, isOCR
         : isOCRMode
             ? `\n\n⚠️ 注意: OCRで抽出されたテキストの場合、完璧でないことがあります。読み取れる商品情報（商品名、価格、特徴など）から、可能な限り${maxQA}個に近いQ&Aを作成してください。最低でも${Math.floor(maxQA * 0.3)}個以上のQ&Aを生成してください。`
             : '';
+    // Q&A種類に応じた追加指示
+    const qaTypeNote = qaType === 'collected'
+        ? `\n\n📋 【Q&A種類: 収集情報ベース】\n**重要**: ソーステキストに明確に記載されている情報のみからQ&Aを作成してください。\n推測や一般知識を含めてはいけません。記載されている事実のみを使用してください。`
+        : qaType === 'suggested'
+            ? `\n\n💭 【Q&A種類: 想定FAQ（ユーザー視点）】\n**重要**: ソーステキストの情報を元に、ユーザーが知りたいであろう内容を推論・補足してください。\n「特に記載がありませんが、一般的には...」「通常は...」のような表現を使って、\nユーザー視点で役立つ想定回答を提供してください。`
+            : `\n\n📊 【Q&A種類: 混在（収集+想定）】\nソーステキストに明記された情報と、ユーザー視点の想定Q&Aの両方を生成してください。`;
     const languagePrompts = {
         ja: `${isVeryLowContent ? '' : '🚫🚫🚫 絶対禁止事項 🚫🚫🚫\n'}${isVeryLowContent ? '⚠️ 避けるべき語句:\n' : '以下の語句を含む質問は**絶対に作成してはいけません**:\n'}「店舗」「在庫」「購入」「配送」「送料」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認」「表示」「数分」「反映」「遅延」「リアルタイム」
 
@@ -845,7 +851,7 @@ ${isVeryLowContent ? 'これらの語句を含む質問は避けてください�
 - もしソーステキストに商品情報が少なく、サイト機能の説明ばかりの場合でも、
   **絶対にサイト機能についてのQ&Aを作らないでください**
 - その場合は、わずかな商品情報から可能な限りQ&Aを作成してください
-- サイト機能の質問を作るくらいなら、Q&A数が少なくても構いません${contentNote}
+- サイト機能の質問を作るくらいなら、Q&A数が少なくても構いません${contentNote}${qaTypeNote}
 
 【出力フォーマット - 必ず守る】
 Q1: [日本語の質問]
@@ -1350,7 +1356,12 @@ app.post('/api/workflow', async (req, res) => {
         console.log(`[GENERATION] ================================================`);
         let qaList = [];
         try {
-            qaList = await generateQA(extractedContent, maxQA, language, effectiveUrl, false); // URL mode - high quality content
+            // Q&A種類を決定
+            const qaType = includeTypes.collected && includeTypes.suggested ? 'mixed' :
+                includeTypes.suggested ? 'suggested' :
+                    'collected';
+            console.log(`[GENERATION] Q&A Type: ${qaType}`);
+            qaList = await generateQA(extractedContent, maxQA, language, effectiveUrl, false, qaType); // URL mode
             console.log(`[GENERATION] Generated ${qaList.length} Q&A items`);
             console.log(`[GENERATION] Q&A generation completed successfully`);
             console.log(`[GENERATION] ============ GENERATED Q&As ============`);
@@ -1440,10 +1451,12 @@ app.post('/api/workflow', async (req, res) => {
         const qaItems = await Promise.all(qaList.map(async (qa, index) => {
             const needsVideo = needsVideoExplanation(qa.question, qa.answer);
             console.error(`DEBUG Q${index + 1} needsVideo: ${needsVideo} - Q: ${qa.question.substring(0, 50)}`);
-            // Q&Aの種類を決定（ユーザーの選択に基づく）
-            const qaSource = includeTypes.suggested && !includeTypes.collected
-                ? 'suggested'
-                : 'collected';
+            // Q&Aの種類を決定
+            // 混在モードの場合: LLMが分類したtypeを使用
+            // 単一モードの場合: ユーザーの選択を使用
+            const qaSource = (includeTypes.collected && includeTypes.suggested) ? (qa.type || 'collected') :
+                includeTypes.suggested ? 'suggested' :
+                    'collected';
             const item = {
                 id: `${Date.now()}-${index}`,
                 question: qa.question,
@@ -1960,7 +1973,12 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
         console.log('  - Text preview:', combinedText.substring(0, 200));
         let qaList = [];
         try {
-            qaList = await generateQA(combinedText, maxQA, language, url, true); // OCR mode - noisy data
+            // Q&A種類を決定
+            const qaType = includeTypes.collected && includeTypes.suggested ? 'mixed' :
+                includeTypes.suggested ? 'suggested' :
+                    'collected';
+            console.log(`[OCR] Q&A Type: ${qaType}`);
+            qaList = await generateQA(combinedText, maxQA, language, url, true, qaType); // OCR mode
             console.log(`✅ ${qaList.length}個のQ&Aを生成しました`);
             console.log('📊 Q&A生成結果の詳細:');
             console.log('  - 生成されたQ&A数:', qaList.length);
@@ -2045,10 +2063,12 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
                 qaResult: qaList.map((qa, i) => `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`).join('\n\n'),
                 qaItems: qaList.map((qa, index) => {
                     const needsVideo = needsVideoExplanation(qa.question, qa.answer);
-                    // Q&Aの種類を決定（ユーザーの選択に基づく）
-                    const qaSource = includeTypes.suggested && !includeTypes.collected
-                        ? 'suggested'
-                        : 'collected';
+                    // Q&Aの種類を決定
+                    // 混在モードの場合: LLMが分類したtypeを使用
+                    // 単一モードの場合: ユーザーの選択を使用
+                    const qaSource = (includeTypes.collected && includeTypes.suggested) ? (qa.type || 'collected') :
+                        includeTypes.suggested ? 'suggested' :
+                            'collected';
                     return {
                         id: String(index + 1),
                         question: qa.question,
