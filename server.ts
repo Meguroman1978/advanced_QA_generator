@@ -1465,18 +1465,71 @@ ${content}
       }
     }
     
-    // mixedモードの場合、25% suggested, 75% collectedを生成
+    // mixedモードの場合、回答内容を分析してtype付与
     if (qaType === 'mixed') {
-      console.log('🔀 Mixed mode: Generating 25% suggested + 75% collected');
-      const suggestedCount = Math.ceil(maxQA * 0.25);
-      const collectedCount = maxQA - suggestedCount;
-      console.log(`  Target: ${suggestedCount} suggested + ${collectedCount} collected = ${maxQA} total`);
+      console.log('🔀 Mixed mode: Analyzing answer content to determine type');
       
-      // uniqueQAから必要な数だけ抽出してtype付与
-      const finalQAs = uniqueQA.slice(0, maxQA).map((qa, index) => ({
+      // 回答内容を分析してcollected/suggestedを判定
+      const classifyQA = (qa: {question: string, answer: string}): 'collected' | 'suggested' => {
+        const answer = qa.answer.toLowerCase();
+        
+        // Suggested indicators（推論や一般論を示す表現）
+        const suggestedIndicators = [
+          // 日本語
+          '一般的', '通常', '推奨', 'おすすめ', '適して', '向いて', 'できます', '可能',
+          '特に記載', '明記されていませんが', '記載はありませんが', '情報はありませんが',
+          '推測', '考えられ', 'と思われ', 'の可能性', '場合があ',
+          // 英語
+          'generally', 'typically', 'usually', 'recommended', 'suitable', 'can be', 'may',
+          'does not provide', 'not specified', 'not mentioned', 'no information',
+          'users can', 'you can', 'it is possible', 'might', 'could',
+          // 中国語
+          '一般来说', '通常', '推荐', '适合', '可以', '没有提到', '未说明'
+        ];
+        
+        // Collected indicators（具体的な事実を示す表現）
+        const collectedIndicators = [
+          // 日本語
+          'です', 'ます', 'である', 'として', '搭載', '採用', '装備', '付属',
+          '価格は', '¥', '円', 'サイズは', '素材は', '重さは', 'カラーは',
+          // 英語
+          'is', 'are', 'features', 'includes', 'comes with', 'equipped with',
+          'price is', '$', 'size is', 'material is', 'weight is', 'color is',
+          'model number', 'part number', 'sku',
+          // 中国語
+          '是', '有', '包括', '配备', '价格', '尺寸', '材质'
+        ];
+        
+        // スコアリング
+        let suggestedScore = 0;
+        let collectedScore = 0;
+        
+        for (const indicator of suggestedIndicators) {
+          if (answer.includes(indicator)) {
+            suggestedScore++;
+          }
+        }
+        
+        for (const indicator of collectedIndicators) {
+          if (answer.includes(indicator)) {
+            collectedScore++;
+          }
+        }
+        
+        // 判定（suggestedが明確に多い場合のみsuggested）
+        const result = suggestedScore > collectedScore + 1 ? 'suggested' : 'collected';
+        console.log(`  Q: "${qa.question.substring(0, 60)}..." → ${result} (S:${suggestedScore}, C:${collectedScore})`);
+        return result;
+      };
+      
+      // 各Q&Aを分類
+      const finalQAs = uniqueQA.slice(0, maxQA).map(qa => ({
         ...qa,
-        type: (index < suggestedCount ? 'suggested' : 'collected') as 'collected' | 'suggested'
+        type: classifyQA(qa)
       }));
+      
+      const suggestedCount = finalQAs.filter(qa => qa.type === 'suggested').length;
+      const collectedCount = finalQAs.filter(qa => qa.type === 'collected').length;
       
       console.log(`📊 Final: Returning ${finalQAs.length} Q&As (${suggestedCount} suggested + ${collectedCount} collected)`);
       return finalQAs;
