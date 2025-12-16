@@ -527,9 +527,19 @@ function extractContent(html) {
     $('input, select, textarea, button').not('[class*="product"], [class*="quantity"], [class*="size"], [class*="color"]').remove();
     // M. 店舗在庫・在庫確認システム関連（徹底的に削除）
     $('[class*="store-inventory"], [class*="storeInventory"], [id*="store-inventory"]').remove();
+    $('[class*="store-stock"], [class*="storeStock"], [id*="store-stock"]').remove();
     $('[class*="store"], [class*="shop"]').not('[class*="product"], [class*="online"]').remove();
     $('[class*="stock"], [class*="inventory"]').not('[class*="product"]').remove();
     $('[class*="availability"]').not('[class*="product"]').remove();
+    $('[class*="in-stock"], [class*="inStock"], [id*="in-stock"]').remove();
+    $('[class*="out-of-stock"], [class*="outOfStock"], [id*="out-of-stock"]').remove();
+    // 🚨 CRITICAL: 在庫関連のテキストを含む要素を完全削除
+    $('*').filter(function () {
+        const text = $(this).text();
+        const inventoryKeywords = ['店舗在庫', '他の店舗', '在庫を確認', '在庫状況', '店舗の在庫',
+            '在庫数', 'リアルタイム', '数分程度', '反映', '確認方法'];
+        return inventoryKeywords.some(keyword => text.includes(keyword));
+    }).remove();
     // N. テキストベースの削除（特定のフレーズを含む要素を削除）
     // 【重要】店舗在庫・サイト機能関連のフレーズを徹底的に削除
     const elementExcludePhrases = [
@@ -662,8 +672,12 @@ function extractContent(html) {
         .trim();
     // 【最終フィルタリング】サイト機能関連のフレーズを含む文を削除
     const sentenceExcludePhrases = [
-        '店舗在庫', '他の店舗', '在庫を確認', '店舗の在庫', '店舗から', '店舗受け取り',
-        '店舗情報', '営業時間', 'ご来店', '来店', 'アクセス方法',
+        // 在庫関連（最優先削除）
+        '店舗在庫', '他の店舗', '在庫を確認', '店舗の在庫', '在庫の確認', '在庫状況',
+        '店舗から', '店舗受け取り', '店舗情報', '営業時間', 'ご来店', '来店',
+        'アクセス方法', '実店舗', '取扱店舗', '在庫数', 'リアルタイム', '反映',
+        '数分程度', '確認方法', '表示', '遅延', '入荷', '再入荷', '入荷予定',
+        // サイト機能関連
         'お問い合わせ', '配送について', '送料について', '返品について', '交換について',
         'ポイント', '会員登録', 'ログイン', 'マイページ', 'アカウント',
         'お支払い方法', '決済方法', 'クレジットカード', '代金引換',
@@ -673,15 +687,29 @@ function extractContent(html) {
         'お気に入り', 'ウィッシュリスト', 'カート', 'チェックアウト',
         'レビューを書く', '口コミ', '評価する', 'コメント'
     ];
-    // 文単位で除外フレーズをチェックし削除
-    const sentences = cleanedContent.split(/[。.]/);
-    cleanedContent = sentences
-        .filter(sentence => {
-        // 除外フレーズが含まれている文は除外
-        return !sentenceExcludePhrases.some(phrase => sentence.includes(phrase));
-    })
-        .join('。')
-        .trim();
+    // 🚨 CRITICAL: 在庫関連テキストの完全削除（文単位 + 行単位）
+    console.log(`🔍 PRE-FILTER content length: ${cleanedContent.length} chars`);
+    // 方法1: 文単位で除外（句点で分割）
+    const contentSentences = cleanedContent.split(/[。.！？\n]/);
+    const filteredContentSentences = contentSentences.filter(sentence => {
+        const shouldExclude = sentenceExcludePhrases.some(phrase => sentence.includes(phrase));
+        if (shouldExclude) {
+            console.log(`🗑️ Filtering out inventory sentence: "${sentence.substring(0, 80)}..."`);
+        }
+        return !shouldExclude;
+    });
+    cleanedContent = filteredContentSentences.join('。').trim();
+    // 方法2: 行単位で除外（改行で分割）
+    const contentLines = cleanedContent.split('\n');
+    const filteredContentLines = contentLines.filter(line => {
+        const shouldExclude = sentenceExcludePhrases.some(phrase => line.includes(phrase));
+        if (shouldExclude) {
+            console.log(`🗑️ Filtering out inventory line: "${line.substring(0, 80)}..."`);
+        }
+        return !shouldExclude;
+    });
+    cleanedContent = filteredContentLines.join('\n').trim();
+    console.log(`✅ POST-FILTER content length: ${cleanedContent.length} chars`);
     console.log(`✅ Extracted ${cleanedContent.length} characters (${productInfoSections.length} sections)`);
     console.log(`📊 Priority distribution: P1=${productInfoSections.filter(s => s.priority === 1).length}, P2=${productInfoSections.filter(s => s.priority === 2).length}, P3=${productInfoSections.filter(s => s.priority === 3).length}, P4=${productInfoSections.filter(s => s.priority === 4).length}`);
     // 【ステップ5】文字数制限（商品情報を最大限保持）
