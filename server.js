@@ -881,6 +881,26 @@ ${isVeryLowContent ? 'これらの語句を含む質問は避けてください�
 - サイト機能の質問を作るくらいなら、Q&A数が少なくても構いません${contentNote}${qaTypeNote}
 
 【出力フォーマット - 必ず守る】
+${qaType === 'mixed' ? `
+各Q&Aについて、以下のフォーマットで出力してください：
+
+Q1: [日本語の質問]
+A1: [日本語の詳細な回答 - ソーステキストの情報のみ]
+Type1: collected または suggested
+
+- **Type: collected** = ソーステキストに明記されている事実（例: 商品名、価格、サイズ、素材など）
+- **Type: suggested** = ソーステキストに明記されていないが推論・補足した内容（例: 「記載はありませんが、一般的には...」など）
+
+判定基準:
+✅ Type: collected - 回答がソーステキストから直接引用または明確に記載されている
+✅ Type: suggested - 回答が「記載なし」「情報なし」または一般論・推論を含む
+
+Q2: [日本語の質問]
+A2: [日本語の詳細な回答]
+Type2: collected または suggested
+
+...Q${maxQA}まで続ける
+` : `
 Q1: [日本語の質問]
 A1: [日本語の詳細な回答 - ソーステキストの情報のみ]
 
@@ -888,6 +908,7 @@ Q2: [日本語の質問]
 A2: [日本語の詳細な回答 - ソーステキストの情報のみ]
 
 ...Q${maxQA}まで続ける
+`}
 
 【ソーステキスト】
 ${content}
@@ -999,6 +1020,26 @@ Extract from source text and create Q&As about:
 - Better to have fewer Q&As than to include site feature questions${contentNote}
 
 【OUTPUT FORMAT - MUST FOLLOW】
+${qaType === 'mixed' ? `
+For each Q&A, output in the following format:
+
+Q1: [English question]
+A1: [Detailed English answer - source text only]
+Type1: collected or suggested
+
+- **Type: collected** = Facts explicitly stated in source text (e.g., product name, price, size, material)
+- **Type: suggested** = Content inferred/supplemented not explicitly in source (e.g., "The source text does not provide...")
+
+Criteria:
+✅ Type: collected - Answer is directly quoted or clearly stated in source text
+✅ Type: suggested - Answer contains "not provided", "no information", or general advice/inference
+
+Q2: [English question]
+A2: [Detailed English answer]
+Type2: collected or suggested
+
+...continue to Q${maxQA}
+` : `
 Q1: [English question]
 A1: [Detailed English answer - source text only]
 
@@ -1006,6 +1047,7 @@ Q2: [English question]
 A2: [Detailed English answer - source text only]
 
 ...continue to Q${maxQA}
+`}
 
 【SOURCE TEXT】
 ${content}
@@ -1145,11 +1187,12 @@ ${content}
         // 生成されたテキストの最初の500文字をログ出力（デバッグ用）
         console.log(`[OpenAI] First 500 chars: ${generatedText.substring(0, 500)}...`);
         console.log(`[OpenAI] Last 300 chars: ...${generatedText.substring(Math.max(0, generatedText.length - 300))}`);
-        // Q&Aをパース（改善版）
+        // Q&Aをパース（Type情報も含む）
         const qaItems = [];
         const lines = generatedText.split('\n');
         let currentQ = '';
         let currentA = '';
+        let currentType = undefined;
         let inAnswer = false;
         for (const line of lines) {
             const trimmed = line.trim();
@@ -1158,31 +1201,47 @@ ${content}
             // Q1:, Q2: などの形式を検出（柔軟なマッチング）
             const qMatch = trimmed.match(/^Q\d+[:：]?\s*(.+)$/i);
             const aMatch = trimmed.match(/^A\d+[:：]?\s*(.+)$/i);
+            const typeMatch = trimmed.match(/^Type\d+[:：]?\s*(collected|suggested)/i);
             if (qMatch) {
                 // 前のQ&Aがあれば保存
                 if (currentQ && currentA) {
-                    qaItems.push({ question: currentQ.trim(), answer: currentA.trim() });
+                    qaItems.push({
+                        question: currentQ.trim(),
+                        answer: currentA.trim(),
+                        type: currentType
+                    });
                 }
                 currentQ = qMatch[1].trim();
                 currentA = '';
+                currentType = undefined;
                 inAnswer = false;
             }
             else if (aMatch) {
                 currentA = aMatch[1].trim();
                 inAnswer = true;
             }
+            else if (typeMatch) {
+                // Type情報を取得（mixedモードのみ）
+                currentType = typeMatch[1].toLowerCase();
+                console.log(`  Parsed type: ${currentType} for Q: "${currentQ.substring(0, 50)}..."`);
+                inAnswer = false;
+            }
             else if (inAnswer && currentA) {
                 // 回答の続き
                 currentA += ' ' + trimmed;
             }
-            else if (!inAnswer && currentQ) {
+            else if (!inAnswer && currentQ && !typeMatch) {
                 // 質問の続き
                 currentQ += ' ' + trimmed;
             }
         }
         // 最後のQ&Aを追加
         if (currentQ && currentA) {
-            qaItems.push({ question: currentQ.trim(), answer: currentA.trim() });
+            qaItems.push({
+                question: currentQ.trim(),
+                answer: currentA.trim(),
+                type: currentType
+            });
         }
         console.log(`📊 Parsed ${qaItems.length} Q&A items from response`);
         if (qaItems.length > 0) {
@@ -1297,94 +1356,21 @@ ${content}
                 console.error('Failed to generate supplement Q&As:', suppErr);
             }
         }
-        // mixedモードの場合、回答内容を分析してtype付与
+        // mixedモードの場合、LLMが返したtype情報をそのまま使用
         if (qaType === 'mixed') {
-            console.log('🔀 Mixed mode: Analyzing answer content to determine type');
-            // 回答内容を分析してcollected/suggestedを判定
-            const classifyQA = (qa) => {
-                const answer = qa.answer.toLowerCase();
-                // 🚨 CRITICAL: Suggested indicators（推論や情報不足を示す強いシグナル）
-                const strongSuggestedIndicators = [
-                    // 情報不足を明示
-                    'does not provide', 'does not specify', 'does not mention',
-                    'not provided', 'not specified', 'not mentioned', 'no information',
-                    'no details', 'not described', 'not indicated',
-                    '情報はありませんが', '記載はありませんが', '明記されていませんが', '特に記載',
-                    '没有提到', '未说明', '没有信息'
-                ];
-                // Suggested indicators（推論や一般論）
-                const suggestedIndicators = [
-                    // 日本語
-                    '一般的', '通常', '推奨', 'おすすめ', '適して', '向いて', 'できます', '可能',
-                    '推測', '考えられ', 'と思われ', 'の可能性', '場合があ',
-                    // 英語
-                    'generally', 'typically', 'usually', 'recommended', 'suitable',
-                    'may', 'might', 'could', 'can be', 'possibly',
-                    'users can', 'you can', 'it is possible',
-                    // 中国語
-                    '一般来说', '推荐', '适合', '可以'
-                ];
-                // Collected indicators（具体的な事実を示す強いシグナル）
-                const strongCollectedIndicators = [
-                    // 明確な仕様
-                    'model number is', 'part number is', 'sku is', 'price is', 'weight is',
-                    'official name is', 'official name of',
-                    '価格は', '型番は', '品番は', '重さは',
-                    '价格是', '型号是', '重量是'
-                ];
-                // Collected indicators（事実を述べる表現）- 短い単語を除外
-                const collectedIndicators = [
-                    // 日本語
-                    'です', 'ます', 'である', 'として', '搭載', '採用', '装備', '付属',
-                    'サイズは', '素材は', 'カラーは',
-                    // 英語（単語境界を考慮した長めのフレーズのみ）
-                    'features', 'includes', 'comes with', 'equipped with',
-                    'size is', 'material is', 'color is',
-                    // 中国語
-                    '包括', '配备', '尺寸', '材质'
-                ];
-                // スコアリング（重み付き）
-                let suggestedScore = 0;
-                let collectedScore = 0;
-                // 強いSuggestedシグナル（重み: 5）
-                for (const indicator of strongSuggestedIndicators) {
-                    if (answer.includes(indicator)) {
-                        suggestedScore += 5;
-                        console.log(`    STRONG Suggested: "${indicator}"`);
-                    }
-                }
-                // 通常のSuggestedシグナル（重み: 1）
-                for (const indicator of suggestedIndicators) {
-                    if (answer.includes(indicator)) {
-                        suggestedScore += 1;
-                    }
-                }
-                // 強いCollectedシグナル（重み: 3）
-                for (const indicator of strongCollectedIndicators) {
-                    if (answer.includes(indicator)) {
-                        collectedScore += 3;
-                        console.log(`    STRONG Collected: "${indicator}"`);
-                    }
-                }
-                // 通常のCollectedシグナル（重み: 1）
-                for (const indicator of collectedIndicators) {
-                    if (answer.includes(indicator)) {
-                        collectedScore += 1;
-                    }
-                }
-                // 判定（Suggestedスコアが高い場合）
-                const result = suggestedScore > collectedScore ? 'suggested' : 'collected';
-                console.log(`  Q: "${qa.question.substring(0, 60)}..." → ${result} (S:${suggestedScore}, C:${collectedScore})`);
-                return result;
-            };
-            // 各Q&Aを分類
-            const finalQAs = uniqueQA.slice(0, maxQA).map(qa => ({
-                ...qa,
-                type: classifyQA(qa)
-            }));
+            console.log('🔀 Mixed mode: Using LLM-provided type classification');
+            const finalQAs = uniqueQA.slice(0, maxQA);
             const suggestedCount = finalQAs.filter(qa => qa.type === 'suggested').length;
             const collectedCount = finalQAs.filter(qa => qa.type === 'collected').length;
-            console.log(`📊 Final: Returning ${finalQAs.length} Q&As (${suggestedCount} suggested + ${collectedCount} collected)`);
+            const undefinedCount = finalQAs.filter(qa => !qa.type).length;
+            // typeが未定義のものはデフォルトでcollectedにする
+            finalQAs.forEach(qa => {
+                if (!qa.type) {
+                    qa.type = 'collected';
+                    console.log(`  ⚠️ Type undefined for Q: "${qa.question.substring(0, 60)}..." → defaulting to 'collected'`);
+                }
+            });
+            console.log(`📊 Final: Returning ${finalQAs.length} Q&As (${suggestedCount} suggested + ${collectedCount} collected + ${undefinedCount} defaulted)`);
             return finalQAs;
         }
         // maxQAの数に制限（超過分はカット）
