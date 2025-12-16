@@ -1236,6 +1236,7 @@ app.post('/api/workflow', async (req, res) => {
         const maxQA = requestMaxQA !== undefined && requestMaxQA !== null ? Number(requestMaxQA) : 5;
         const language = requestLanguage && requestLanguage.trim() !== '' ? requestLanguage : 'ja';
         const sourceCode = req.body.sourceCode; // HTML from browser extension
+        const includeTypes = req.body.includeTypes || { collected: true, suggested: false }; // Q&A types
         console.log('Parsed parameters:');
         console.log('  - url:', url);
         console.log('  - maxQA (raw):', requestMaxQA, 'type:', typeof requestMaxQA);
@@ -1243,6 +1244,7 @@ app.post('/api/workflow', async (req, res) => {
         console.log('  - language (raw):', requestLanguage, 'type:', typeof requestLanguage);
         console.log('  - language (parsed):', language, 'type:', typeof language);
         console.log('  - sourceCode provided:', !!sourceCode, 'length:', sourceCode?.length || 0);
+        console.log('  - includeTypes:', includeTypes);
         // URLまたはソースコードが必要（どちらか一方でOK）
         if (!url && !sourceCode) {
             console.log('Error: URL or sourceCode is required');
@@ -1413,15 +1415,21 @@ app.post('/api/workflow', async (req, res) => {
         }
         const openai = new OpenAI({ apiKey });
         // qaItemsを生成（動画推奨情報を含む）
-        // source: 'collected' → フロントエンドで「サイト情報」ラベル表示
+        // source: ユーザーの選択に応じて設定
+        // - includeTypes.collected のみ → 'collected' (Webサイト情報)
+        // - includeTypes.suggested のみ → 'suggested' (想定FAQ)
         const qaItems = await Promise.all(qaList.map(async (qa, index) => {
             const needsVideo = needsVideoExplanation(qa.question, qa.answer);
             console.error(`DEBUG Q${index + 1} needsVideo: ${needsVideo} - Q: ${qa.question.substring(0, 50)}`);
+            // Q&Aの種類を決定（ユーザーの選択に基づく）
+            const qaSource = includeTypes.suggested && !includeTypes.collected
+                ? 'suggested'
+                : 'collected';
             const item = {
                 id: `${Date.now()}-${index}`,
                 question: qa.question,
                 answer: qa.answer,
-                source: 'collected', // URLから抽出 → 「サイト情報」ラベル
+                source: qaSource, // ユーザー選択に応じたラベル
                 sourceType: 'text',
                 url: url, // 元のURLを追加
                 timestamp: Date.now(),
@@ -1843,8 +1851,10 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
     try {
         const url = req.body.url || '';
         const files = req.files;
+        const includeTypes = req.body.includeTypes ? JSON.parse(req.body.includeTypes) : { collected: true, suggested: false };
         console.log('  - URL:', url);
         console.log('  - Uploaded files:', files?.length || 0);
+        console.log('  - includeTypes:', includeTypes);
         if (!files || files.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -2007,8 +2017,7 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
             return videoKeywords.some(keyword => text.includes(keyword.toLowerCase()));
         };
         // レスポンス（必要なフィールドを全て含める）
-        // 重要: OCR画像から抽出したテキストは「サイト情報」として扱う
-        // source: 'collected' → フロントエンドで「サイト情報」ラベル表示
+        // source: ユーザーの選択に応じて設定
         res.json({
             success: true,
             data: {
@@ -2017,11 +2026,15 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
                 qaResult: qaList.map((qa, i) => `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`).join('\n\n'),
                 qaItems: qaList.map((qa, index) => {
                     const needsVideo = needsVideoExplanation(qa.question, qa.answer);
+                    // Q&Aの種類を決定（ユーザーの選択に基づく）
+                    const qaSource = includeTypes.suggested && !includeTypes.collected
+                        ? 'suggested'
+                        : 'collected';
                     return {
                         id: String(index + 1),
                         question: qa.question,
                         answer: qa.answer,
-                        source: 'collected', // OCR画像内のテキストも「サイト情報」として扱う
+                        source: qaSource, // ユーザー選択に応じたラベル
                         sourceType: 'image-ocr',
                         url: url || 'ocr-images',
                         needsVideo: needsVideo,

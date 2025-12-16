@@ -239,6 +239,7 @@ function AppAdvanced() {
         formData.append('url', config.urls[0] || '');
         formData.append('maxQA', config.maxQA.toString());
         formData.append('language', language);
+        formData.append('includeTypes', JSON.stringify(config.includeTypes)); // Q&A types
         imageFiles.forEach((file, index) => {
           formData.append(`image${index}`, file);
         });
