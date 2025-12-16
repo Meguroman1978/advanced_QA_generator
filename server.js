@@ -1303,46 +1303,77 @@ ${content}
             // 回答内容を分析してcollected/suggestedを判定
             const classifyQA = (qa) => {
                 const answer = qa.answer.toLowerCase();
-                // Suggested indicators（推論や一般論を示す表現）
+                // 🚨 CRITICAL: Suggested indicators（推論や情報不足を示す強いシグナル）
+                const strongSuggestedIndicators = [
+                    // 情報不足を明示
+                    'does not provide', 'does not specify', 'does not mention',
+                    'not provided', 'not specified', 'not mentioned', 'no information',
+                    'no details', 'not described', 'not indicated',
+                    '情報はありませんが', '記載はありませんが', '明記されていませんが', '特に記載',
+                    '没有提到', '未说明', '没有信息'
+                ];
+                // Suggested indicators（推論や一般論）
                 const suggestedIndicators = [
                     // 日本語
                     '一般的', '通常', '推奨', 'おすすめ', '適して', '向いて', 'できます', '可能',
-                    '特に記載', '明記されていませんが', '記載はありませんが', '情報はありませんが',
                     '推測', '考えられ', 'と思われ', 'の可能性', '場合があ',
                     // 英語
-                    'generally', 'typically', 'usually', 'recommended', 'suitable', 'can be', 'may',
-                    'does not provide', 'not specified', 'not mentioned', 'no information',
-                    'users can', 'you can', 'it is possible', 'might', 'could',
+                    'generally', 'typically', 'usually', 'recommended', 'suitable',
+                    'may', 'might', 'could', 'can be', 'possibly',
+                    'users can', 'you can', 'it is possible',
                     // 中国語
-                    '一般来说', '通常', '推荐', '适合', '可以', '没有提到', '未说明'
+                    '一般来说', '推荐', '适合', '可以'
                 ];
-                // Collected indicators（具体的な事実を示す表現）
+                // Collected indicators（具体的な事実を示す強いシグナル）
+                const strongCollectedIndicators = [
+                    // 明確な仕様
+                    'model number is', 'part number is', 'sku is', 'price is', 'weight is',
+                    'official name is', 'official name of',
+                    '価格は', '型番は', '品番は', '重さは',
+                    '价格是', '型号是', '重量是'
+                ];
+                // Collected indicators（事実を述べる表現）- 短い単語を除外
                 const collectedIndicators = [
                     // 日本語
                     'です', 'ます', 'である', 'として', '搭載', '採用', '装備', '付属',
-                    '価格は', '¥', '円', 'サイズは', '素材は', '重さは', 'カラーは',
-                    // 英語
-                    'is', 'are', 'features', 'includes', 'comes with', 'equipped with',
-                    'price is', '$', 'size is', 'material is', 'weight is', 'color is',
-                    'model number', 'part number', 'sku',
+                    'サイズは', '素材は', 'カラーは',
+                    // 英語（単語境界を考慮した長めのフレーズのみ）
+                    'features', 'includes', 'comes with', 'equipped with',
+                    'size is', 'material is', 'color is',
                     // 中国語
-                    '是', '有', '包括', '配备', '价格', '尺寸', '材质'
+                    '包括', '配备', '尺寸', '材质'
                 ];
-                // スコアリング
+                // スコアリング（重み付き）
                 let suggestedScore = 0;
                 let collectedScore = 0;
+                // 強いSuggestedシグナル（重み: 5）
+                for (const indicator of strongSuggestedIndicators) {
+                    if (answer.includes(indicator)) {
+                        suggestedScore += 5;
+                        console.log(`    STRONG Suggested: "${indicator}"`);
+                    }
+                }
+                // 通常のSuggestedシグナル（重み: 1）
                 for (const indicator of suggestedIndicators) {
                     if (answer.includes(indicator)) {
-                        suggestedScore++;
+                        suggestedScore += 1;
                     }
                 }
+                // 強いCollectedシグナル（重み: 3）
+                for (const indicator of strongCollectedIndicators) {
+                    if (answer.includes(indicator)) {
+                        collectedScore += 3;
+                        console.log(`    STRONG Collected: "${indicator}"`);
+                    }
+                }
+                // 通常のCollectedシグナル（重み: 1）
                 for (const indicator of collectedIndicators) {
                     if (answer.includes(indicator)) {
-                        collectedScore++;
+                        collectedScore += 1;
                     }
                 }
-                // 判定（suggestedが明確に多い場合のみsuggested）
-                const result = suggestedScore > collectedScore + 1 ? 'suggested' : 'collected';
+                // 判定（Suggestedスコアが高い場合）
+                const result = suggestedScore > collectedScore ? 'suggested' : 'collected';
                 console.log(`  Q: "${qa.question.substring(0, 60)}..." → ${result} (S:${suggestedScore}, C:${collectedScore})`);
                 return result;
             };
