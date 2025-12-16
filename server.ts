@@ -965,15 +965,14 @@ ${isVeryLowContent ? 'これらの語句を含む質問は避けてください�
 - 「この商品のお手入れ方法は？」
 - 「このモデルと他のモデルの違いは何ですか？」
 
-❌ **悪い質問の例（サイト機能・サービスについて）**:
-- 「この商品を購入する方法は？」 → 商品ではなくサイト機能
-- 「配送料はいくらですか？」 → 商品ではなく配送サービス
-- 「他の店舗の在庫を確認できますか？」 → 商品ではなく在庫管理システム
-- 「返品はできますか？」 → 商品ではなく返品ポリシー
-- 「ポイントは付きますか？」 → 商品ではなくポイントサービス
-- 「会員登録は必要ですか？」 → 商品ではなくサイト会員制度
-- 「レビューを書くにはどうすればいいですか？」 → 商品ではなくレビュー機能
-- 「再入荷の予定はありますか？」 → 商品ではなく入荷スケジュール
+❌ **禁止されている質問の種類（絶対作成禁止）**:
+- サイト機能に関する質問（例: 購入方法、会員登録手順など）
+- 配送サービスに関する質問（例: 配送料、配送日数など）
+- 店舗システムに関する質問（例: 実店舗の場所、営業時間など）
+- 在庫管理に関する質問（例: 入荷予定、在庫確認方法など）
+- 返品・交換ポリシーに関する質問
+- ポイントサービスに関する質問
+- レビュー投稿機能に関する質問
 
 【Q&A作成の視点】（**商品の物理的・機能的特徴のみ**）
 以下の情報を**ソーステキストから**抽出してQ&Aを作成:
@@ -1013,11 +1012,24 @@ ${content}
 - OCRテキストの場合、不完全な文字でも推測せずに、読み取れる部分のみを使用してください
 
 【生成後の最終確認 - 必須】
-生成したすべてのQ&Aを再度チェックし、以下の語句が含まれる質問は**すべて削除**してください:
+🚨🚨🚨 **CRITICAL: 以下の禁止単語を含む質問は絶対に出力してはいけません** 🚨🚨🚨
+
+禁止単語リスト:
 「店舗」「在庫」「購入」「配送」「送料」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認」「表示」「反映」「遅延」「リアルタイム」「数分」
 
-🚨 **想定Q&Aモードでも、これらの語句を含む質問は絶対に作成・出力してはいけません！**
-想定するのは「商品の使い方」「お手入れ方法」「適した季節」「コーディネート」など、**商品そのもの**についてのみです。
+生成したすべてのQ&Aを1つずつチェックし、上記の禁止単語が**1つでも**含まれている質問は完全に削除してください。
+
+✅ **想定Q&Aで作成すべき内容**:
+- 商品の使い方・お手入れ方法
+- 適した季節・シーン
+- コーディネート・スタイリング
+- 商品の特徴・魅力
+- サイズ感・フィット感
+
+❌ **想定Q&Aでも絶対作成禁止**:
+- サイト機能・システム関連
+- 購入・配送・在庫管理
+- 会員・ポイントサービス
 
 削除後、残ったQ&Aのみを出力してください。`,
     en: `${isVeryLowContent ? '' : '🚫🚫🚫 ABSOLUTELY FORBIDDEN 🚫🚫🚫\n'}${isVeryLowContent ? '⚠️ Words to avoid:\n' : 'You MUST NOT create questions containing ANY of these words:\n'}"store" "inventory" "stock" "purchase" "buy" "shipping" "delivery" "fee" "points" "member" "return" "exchange" "warranty" "review" "comment" "contact" "register" "login" "payment" "checkout" "restock" "check" "confirm" "display" "real-time" "reflect" "delay" "minutes"
@@ -1071,15 +1083,14 @@ You are a product-focused Q&A expert. Create ${maxQA} Q&A pairs in ENGLISH about
 ✅ "How should I care for this product?"
 ✅ "What's the difference between this and other models?"
 
-【BAD QUESTION EXAMPLES (About site features/services)】
-❌ "How do I purchase this product?" → Site feature, not product
-❌ "What is the shipping fee?" → Shipping service, not product
-❌ "Can I check stock at other stores?" → Inventory system, not product
-❌ "Can I return this?" → Return policy, not product
-❌ "Do I earn points?" → Point service, not product
-❌ "Do I need to register?" → Membership system, not product
-❌ "How do I write a review?" → Review feature, not product
-❌ "When will it restock?" → Restock schedule, not product
+❌ **FORBIDDEN QUESTION TYPES (ABSOLUTELY PROHIBITED)**:
+- Site functionality questions (e.g., purchase methods, registration procedures)
+- Shipping service questions (e.g., shipping fees, delivery days)
+- Store system questions (e.g., physical store locations, business hours)
+- Inventory management questions (e.g., restock schedules, stock check methods)
+- Return/exchange policy questions
+- Point service questions
+- Review posting functionality questions
 
 【Q&A CREATION FOCUS】(**Physical & functional features ONLY**)
 Extract from source text and create Q&As about:
@@ -1119,8 +1130,24 @@ ${content}
 - For OCR text, use only readable parts without guessing incomplete characters
 
 【FINAL VERIFICATION - MANDATORY】
-After generating all Q&As, CHECK AGAIN and DELETE ALL questions containing these terms:
+🚨🚨🚨 **CRITICAL: NEVER output questions containing forbidden terms** 🚨🚨🚨
+
+Forbidden terms list:
 "store" "inventory" "stock" "purchase" "buy" "shipping" "delivery" "fee" "points" "member" "return" "exchange" "warranty" "review" "comment" "contact" "register" "login" "payment" "checkout" "restock" "check" "confirm" "display" "real-time" "reflect" "delay" "minutes"
+
+Check ALL generated Q&As one by one, and completely delete any question containing **even one** forbidden term.
+
+✅ **Suggested Q&A should create**:
+- Product usage & care methods
+- Suitable seasons & occasions
+- Styling & coordination
+- Product features & appeal
+- Size feeling & fit
+
+❌ **Absolutely prohibited even in Suggested Q&A**:
+- Site features & system-related
+- Purchase, shipping, inventory management
+- Membership & point services
 
 Output ONLY the remaining Q&As after deletion.`,
     zh: `🚫🚫🚫 绝对禁止事项 🚫🚫🚫
@@ -1404,6 +1431,23 @@ ${content}
       } catch (suppErr) {
         console.error('Failed to generate supplement Q&As:', suppErr);
       }
+    }
+    
+    // mixedモードの場合、25% suggested, 75% collectedを生成
+    if (qaType === 'mixed') {
+      console.log('🔀 Mixed mode: Generating 25% suggested + 75% collected');
+      const suggestedCount = Math.ceil(maxQA * 0.25);
+      const collectedCount = maxQA - suggestedCount;
+      console.log(`  Target: ${suggestedCount} suggested + ${collectedCount} collected = ${maxQA} total`);
+      
+      // uniqueQAから必要な数だけ抽出してtype付与
+      const finalQAs = uniqueQA.slice(0, maxQA).map((qa, index) => ({
+        ...qa,
+        type: (index < suggestedCount ? 'suggested' : 'collected') as 'collected' | 'suggested'
+      }));
+      
+      console.log(`📊 Final: Returning ${finalQAs.length} Q&As (${suggestedCount} suggested + ${collectedCount} collected)`);
+      return finalQAs;
     }
     
     // maxQAの数に制限（超過分はカット）
