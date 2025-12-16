@@ -33,10 +33,10 @@ interface WorkflowResult {
   qaItems: QAItem[];
   stats: {
     totalPages: number;
-    imagesAnalyzed: number;
-    videosAnalyzed: number;
-    pdfsAnalyzed: number;
-    reviewsAnalyzed: number;
+    websiteBasedQA?: number;
+    suggestedQA?: number;
+    imagesProcessed?: number;
+    textExtracted?: number;
   };
   robotsAllowed: boolean;
   cost?: number;
@@ -587,19 +587,6 @@ function AppAdvanced() {
 
   const getSourceLabel = (source: string) => {
     return source === 'collected' ? t('badgeCollected') : t('badgeSuggested');
-  };
-
-  const getQACountByType = (type: 'text' | 'image' | 'video' | 'pdf') => {
-    if (!result) return 0;
-    return result.qaItems.filter(item => (item.sourceType || 'text') === type).length;
-  };
-
-  const getMediaQACount = () => {
-    // 画像と動画を合算
-    if (!result) return 0;
-    const imageCount = result.qaItems.filter(item => item.sourceType === 'image').length;
-    const videoCount = result.qaItems.filter(item => item.sourceType === 'video').length;
-    return imageCount + videoCount;
   };
 
   const stages = [
@@ -1177,24 +1164,14 @@ function AppAdvanced() {
                       <div className="stat-label-apple">{t('generatedQACountLabel')}</div>
                     </div>
                     <div className="stat-item-apple">
-                      <div className="stat-icon-apple">📝</div>
-                      <div className="stat-value-apple">{getQACountByType('text')}</div>
-                      <div className="stat-label-apple">{t('textLabel')}</div>
+                      <div className="stat-icon-apple">🌐</div>
+                      <div className="stat-value-apple">{result.qaItems.filter(item => item.source === 'collected').length}</div>
+                      <div className="stat-label-apple">{language === 'ja' ? 'サイト情報' : language === 'zh' ? '网站信息' : 'Website-based Q&A'}</div>
                     </div>
                     <div className="stat-item-apple">
-                      <div className="stat-icon-apple">🎬</div>
-                      <div className="stat-value-apple">{getMediaQACount()}</div>
-                      <div className="stat-label-apple">{t('imageVideoLabel')}</div>
-                    </div>
-                    <div className="stat-item-apple">
-                      <div className="stat-icon-apple">📦</div>
-                      <div className="stat-value-apple">{getQACountByType('pdf')}</div>
-                      <div className="stat-label-apple">{t('otherPdfLabel')}</div>
-                    </div>
-                    <div className="stat-item-apple">
-                      <div className="stat-icon-apple">⭐</div>
-                      <div className="stat-value-apple">{result.stats.reviewsAnalyzed}</div>
-                      <div className="stat-label-apple">{t('reviewsLabel')}</div>
+                      <div className="stat-icon-apple">💭</div>
+                      <div className="stat-value-apple">{result.qaItems.filter(item => item.source === 'suggested' || (item.source as string) === '収集した情報から生成').length}</div>
+                      <div className="stat-label-apple">{language === 'ja' ? '想定質問' : language === 'zh' ? '建议问题' : 'Suggested Q&A'}</div>
                     </div>
                     {result.cost && (
                       <div className="stat-item-apple stat-highlight-apple">

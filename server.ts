@@ -1916,10 +1916,8 @@ Example2: [Specific video title example 2]
         robotsAllowed: true, // robots.txtチェックを無効化
         stats: {
           totalPages: 1,
-          imagesAnalyzed: 0,
-          videosAnalyzed: 0,
-          pdfsAnalyzed: 0,
-          reviewsAnalyzed: 0
+          websiteBasedQA: qaItems.filter(item => item.source === 'collected').length,
+          suggestedQA: qaItems.filter(item => item.source === 'suggested' || item.source === '収集した情報から生成').length
         },
         // 🔍 診断情報を追加（Q&A数が0の場合にフロントエンドで表示）
         diagnostics: qaItems.length === 0 ? {
@@ -2481,10 +2479,16 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
         stats: {
           totalPages: 1,
           imagesProcessed: files.length,
-          imagesAnalyzed: files.length,
-          videosAnalyzed: 0,
-          pdfsAnalyzed: 0,
-          reviewsAnalyzed: 0,
+          websiteBasedQA: qaList.filter((qa, index) => {
+            const qaSource = (includeTypes.collected && includeTypes.suggested) ? (qa.type || 'collected') :
+                             includeTypes.suggested ? 'suggested' : 'collected';
+            return qaSource === 'collected';
+          }).length,
+          suggestedQA: qaList.filter((qa, index) => {
+            const qaSource: string = (includeTypes.collected && includeTypes.suggested) ? (qa.type || 'collected') :
+                             includeTypes.suggested ? 'suggested' : 'collected';
+            return qaSource === 'suggested' || qaSource === '収集した情報から生成';
+          }).length,
           textExtracted: combinedText.length
         }
       }
