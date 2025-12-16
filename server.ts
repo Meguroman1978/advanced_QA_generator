@@ -555,6 +555,7 @@ function extractContent(html: string): string {
   // JSON-LDが見つかった場合、これを優先的に使用
   if (jsonLdContent.length > 100) {
     console.log('✅ Using JSON-LD as primary content source');
+    console.log(`📄 JSON-LD content: ${jsonLdContent}`);
     return jsonLdContent;
   }
   
@@ -822,6 +823,27 @@ function extractContent(html: string): string {
   if (finalContent.length < 100) {
     console.warn('⚠️ WARNING: Very little content extracted. This might not be a product page.');
   }
+  
+  // 【ステップ6】最終的なテキストフィルタリング - 在庫関連の文を削除
+  const inventoryPhrases = [
+    '店舗在庫', '他の店舗', '在庫を確認', '店舗の在庫', '在庫数', '在庫状況',
+    '数分程度かかる', 'リアルタイム', '反映に', '確認方法', '店舗受け取り'
+  ];
+  
+  const lines = finalContent.split('\n');
+  const filteredLines = lines.filter(line => {
+    // 在庫関連フレーズを含む行を除外
+    for (const phrase of inventoryPhrases) {
+      if (line.includes(phrase)) {
+        console.log(`🗑️ Filtering out inventory line: ${line.substring(0, 50)}...`);
+        return false;
+      }
+    }
+    return true;
+  });
+  
+  finalContent = filteredLines.join('\n');
+  console.log(`🧹 After inventory filtering: ${finalContent.length} characters (removed ${lines.length - filteredLines.length} lines)`);
   
   // 抽出されたコンテンツのプレビューを表示
   console.log(`📄 Extracted content preview (first 300 chars): ${finalContent.substring(0, 300)}`);
