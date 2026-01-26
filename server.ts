@@ -2448,47 +2448,129 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
 
     // レスポンス（必要なフィールドを全て含める）
     // source: ユーザーの選択に応じて設定
+    // 動画推奨情報を生成（URLモードと同じロジック）
+    const apiKey = process.env.OPENAI_API_KEY;
+    const openai = apiKey ? new OpenAI({ apiKey }) : null;
+    
+    const qaItems = await Promise.all(qaList.map(async (qa, index) => {
+      const needsVideo = needsVideoExplanation(qa.question, qa.answer);
+      // Q&Aの種類を決定
+      const qaSource: 'collected' | 'suggested' = 
+        (includeTypes.collected && includeTypes.suggested) ? (qa.type || 'collected') :
+        includeTypes.suggested ? 'suggested' :
+        'collected';
+      
+      const item: any = {
+        id: String(index + 1),
+        question: qa.question,
+        answer: qa.answer,
+        source: qaSource,
+        sourceType: 'image-ocr',
+        url: url || 'ocr-images',
+        needsVideo: needsVideo
+      };
+      
+      // 動画推奨がある場合、OpenAI APIで具体的な理由と例を生成
+      if (needsVideo && openai) {
+        try {
+          const videoPrompt = language === 'ja'
+            ? `以下のQ&Aについて、動画で説明すべき理由と具体的な動画例を提案してください。
+
+質問: ${qa.question}
+回答: ${qa.answer}
+
+以下の形式で回答してください：
+理由: [なぜこのQ&Aは動画での説明が効果的か、具体的に1文で]
+例1: [具体的な動画タイトル例1]
+例2: [具体的な動画タイトル例2]
+
+【重要】必ず日本語で、このQ&Aの内容に特化した具体的な提案をしてください。`
+            : language === 'zh'
+            ? `对于以下的问答，请提出为什么需要用视频说明的理由，以及具体的视频示例。
+
+问题: ${qa.question}
+回答: ${qa.answer}
+
+请按照以下格式回答：
+理由: [为什么这个问答用视频说明更有效，用一句话具体说明]
+例1: [具体的视频标题示例1]
+例2: [具体的视频标题示例2]
+
+【重要】必须用中文，并且要针对这个问答内容提出具体的建议。`
+            : `For the following Q&A, suggest why video explanation would be effective and specific video examples.
+
+Question: ${qa.question}
+Answer: ${qa.answer}
+
+Please respond in this format:
+Reason: [Why video explanation is effective for this Q&A, specifically in one sentence]
+Example1: [Specific video title example 1]
+Example2: [Specific video title example 2]
+
+【Important】Must be in English and specific to this Q&A content.`;
+
+          const videoResponse = await openai.chat.completions.create({
+            model: 'gpt-3.5-turbo',
+            messages: [
+              { role: 'system', content: 'You are a video content planning expert. Provide specific, actionable video suggestions.' },
+              { role: 'user', content: videoPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 300
+          });
+
+          const videoSuggestion = videoResponse.choices[0]?.message?.content || '';
+          console.log(`[OCR VIDEO] Q${index + 1} suggestion:`, videoSuggestion.substring(0, 100));
+
+          // レスポンスをパース
+          const reasonMatch = videoSuggestion.match(/理由[：:]\s*(.+?)(?=\n|例)/s) || 
+                             videoSuggestion.match(/Reason[：:]\s*(.+?)(?=\n|Example)/s);
+          const example1Match = videoSuggestion.match(/例1[：:]\s*(.+?)(?=\n|例2|$)/s) || 
+                               videoSuggestion.match(/Example1[：:]\s*(.+?)(?=\n|Example2|$)/s);
+          const example2Match = videoSuggestion.match(/例2[：:]\s*(.+?)(?=\n|$)/s) || 
+                               videoSuggestion.match(/Example2[：:]\s*(.+?)(?=\n|$)/s);
+
+          if (reasonMatch) {
+            item.videoReason = reasonMatch[1].trim();
+          }
+          
+          const examples = [];
+          if (example1Match) examples.push(example1Match[1].trim());
+          if (example2Match) examples.push(example2Match[1].trim());
+          
+          if (examples.length > 0) {
+            item.videoExamples = examples;
+          }
+          
+          console.log(`[OCR VIDEO] Q${index + 1} parsed - reason: ${item.videoReason?.substring(0, 50)}, examples: ${examples.length}`);
+        } catch (videoErr) {
+          console.error(`[OCR VIDEO] Failed to generate video suggestion for Q${index + 1}:`, videoErr);
+          // フォールバック
+          item.videoReason = '視覚的な説明が効果的です';
+          item.videoExamples = ['操作手順の動画', 'デモンストレーション'];
+        }
+      } else if (needsVideo && !openai) {
+        // API keyがない場合のフォールバック
+        item.videoReason = '視覚的な説明が効果的です';
+        item.videoExamples = ['操作手順の動画', 'デモンストレーション'];
+      }
+      
+      return item;
+    }));
+    
     res.json({
       success: true,
       data: {
         url: url || 'ocr-images',
         extractedContent: combinedText.substring(0, 500) + '...',
         qaResult: qaList.map((qa, i) => `Q${i + 1}: ${qa.question}\nA${i + 1}: ${qa.answer}`).join('\n\n'),
-        qaItems: qaList.map((qa, index) => {
-          const needsVideo = needsVideoExplanation(qa.question, qa.answer);
-          // Q&Aの種類を決定
-          // 混在モードの場合: LLMが分類したtypeを使用
-          // 単一モードの場合: ユーザーの選択を使用
-          const qaSource: 'collected' | 'suggested' = 
-            (includeTypes.collected && includeTypes.suggested) ? (qa.type || 'collected') :
-            includeTypes.suggested ? 'suggested' :
-            'collected';
-          return {
-            id: String(index + 1),
-            question: qa.question,
-            answer: qa.answer,
-            source: qaSource,  // ユーザー選択に応じたラベル
-            sourceType: 'image-ocr',
-            url: url || 'ocr-images',
-            needsVideo: needsVideo,
-            videoReason: needsVideo ? '視覚的な説明が効果的です' : undefined,
-            videoExamples: needsVideo ? ['操作手順の動画', 'デモンストレーション'] : undefined
-          };
-        }),
+        qaItems: qaItems,
         robotsAllowed: true,
         stats: {
           totalPages: 1,
           imagesProcessed: files.length,
-          websiteBasedQA: qaList.filter((qa, index) => {
-            const qaSource = (includeTypes.collected && includeTypes.suggested) ? (qa.type || 'collected') :
-                             includeTypes.suggested ? 'suggested' : 'collected';
-            return qaSource === 'collected';
-          }).length,
-          suggestedQA: qaList.filter((qa, index) => {
-            const qaSource: string = (includeTypes.collected && includeTypes.suggested) ? (qa.type || 'collected') :
-                             includeTypes.suggested ? 'suggested' : 'collected';
-            return qaSource === 'suggested' || qaSource === '収集した情報から生成';
-          }).length,
+          websiteBasedQA: qaItems.filter(item => item.source === 'collected').length,
+          suggestedQA: qaItems.filter(item => item.source === 'suggested').length,
           textExtracted: combinedText.length
         }
       }
