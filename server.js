@@ -1470,10 +1470,13 @@ app.post('/api/workflow', async (req, res) => {
         // コンテンツが短すぎる場合は警告（ただし、50文字以上ならQ&A生成を試行）
         if (extractedContent.length < 50) {
             console.warn(`⚠️ Content too short: ${extractedContent.length} characters`);
+            console.warn(`📄 Extracted content: "${extractedContent}"`);
+            console.warn(`📏 Original HTML length: ${html.length} characters`);
+            console.warn(`📄 HTML preview: ${html.substring(0, 500)}`);
             return res.status(400).json({
                 success: false,
-                error: 'コンテンツが短すぎます。HTMLソースコードが正しく貼り付けられているか確認してください。提案: ブラウザで「ページのソースを表示」から完全なHTMLをコピーしてください。',
-                details: `Content length: ${extractedContent.length} characters. Preview: ${extractedContent.substring(0, 200)}`
+                error: 'コンテンツが短すぎます。HTMLソースコードが正しく貼り付けられているか確認してください。\n\n提案:\n1. ブラウザで「ページのソースを表示」（Ctrl+U / Cmd+U）から完全なHTMLをコピー\n2. または、製品ページのURLを直接入力してください（URLモード推奨）',
+                details: `抽出されたコンテンツ長: ${extractedContent.length}文字\n元のHTML長: ${html.length}文字\n\n抽出されたコンテンツ:\n${extractedContent}\n\nHTML先頭200文字:\n${html.substring(0, 200)}`
             });
         }
         // 50-200文字の場合は警告を出すが続行
