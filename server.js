@@ -896,13 +896,15 @@ ${qaTypeInstructions}
 
 ✅ **作成すべき質問**: 商品名、素材、サイズ、色、機能、価格、お手入れ方法、使用シーン
 
+⚠️ **重要**: たとえソーステキストに商品情報が少なくても、読み取れる範囲で必ず${maxQA}個のQ&Aを作成してください。情報が不足している場合は「情報が記載されていません」等の回答でも構いません。
+
 【出力フォーマット】
 ${qaType === 'mixed' ? 'Q1: [質問]\nA1: [回答]\nType1: collected または suggested\n\nQ2: ...' : 'Q1: [質問]\nA1: [回答]\n\nQ2: ...'}
 
 【ソーステキスト】
 ${trimmedContent}
 
-必ず${maxQA}個のQ&Aを生成してください。`;
+**必ず正確に${maxQA}個のQ&Aを生成してください。0個や${maxQA}個未満は許可されません。**`;
     }
     else if (language === 'en') {
         return `You are a product Q&A expert. Create ${maxQA} Q&A pairs in ENGLISH about **the product itself** (name, color, material, size, function, price) from the source text below.
@@ -913,13 +915,15 @@ ${qaTypeInstructions.replace('ソーステキスト', 'source text').replace('�
 
 ✅ **CREATE**: Product name, material, size, color, features, price, care instructions, usage scenarios
 
+⚠️ **IMPORTANT**: Even if product information is limited, you MUST generate EXACTLY ${maxQA} Q&A pairs. If information is missing, answer with "Not specified in the source" or similar.
+
 【OUTPUT FORMAT】
 ${qaType === 'mixed' ? 'Q1: [question]\nA1: [answer]\nType1: collected or suggested\n\nQ2: ...' : 'Q1: [question]\nA1: [answer]\n\nQ2: ...'}
 
 【SOURCE TEXT】
 ${trimmedContent}
 
-Generate EXACTLY ${maxQA} Q&A pairs.`;
+**Generate EXACTLY ${maxQA} Q&A pairs. 0 or fewer than ${maxQA} is NOT acceptable.**`;
     }
     else { // Chinese
         return `你是专业的中文产品Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对，仅关于**产品本身**（名称、颜色、材料、尺寸、功能、价格）。
@@ -930,6 +934,8 @@ ${qaTypeInstructions.replace('ソーステキスト', '源文本').replace('推�
 
 ✅ **应创建**: 产品名称、材料、尺寸、颜色、功能、价格、保养方法、使用场景
 
+⚠️ **重要**: 即使源文本中产品信息有限，也必须生成正好${maxQA}个问答对。信息不足时可以回答"源文本未提供此信息"等。
+
 【输出格式】
 Q1: [中文问题]
 A1: [详细中文答案]
@@ -939,7 +945,7 @@ Q2: ...
 【源文本】
 ${trimmedContent}
 
-必须生成正好${maxQA}个问答对。`;
+**必须生成正好${maxQA}个问答对。0个或少于${maxQA}个都不可接受。**`;
     }
 }
 /**
@@ -1017,6 +1023,7 @@ async function generateQAWithOpenAI(prompt, maxQA) {
     const text = response.choices[0]?.message?.content || '';
     console.log(`✅ OpenAI response: ${text.length} characters`);
     console.log(`📊 Token usage: input=${response.usage?.prompt_tokens}, output=${response.usage?.completion_tokens}`);
+    console.log(`📝 OpenAI response preview (first 500 chars):\n${text.substring(0, 500)}`);
     return parseQAResponse(text);
 }
 /**
@@ -1025,6 +1032,7 @@ async function generateQAWithOpenAI(prompt, maxQA) {
 function parseQAResponse(text) {
     const qaList = [];
     const lines = text.split('\n');
+    console.log(`🔍 Parsing response: ${lines.length} lines total`);
     let currentQ = '';
     let currentA = '';
     let currentType = undefined;
@@ -1036,6 +1044,7 @@ function parseQAResponse(text) {
             // 前のQ&Aを保存
             if (currentQ && currentA) {
                 qaList.push({ question: currentQ, answer: currentA, type: currentType });
+                console.log(`  ✓ Parsed Q&A #${qaList.length}: Q="${currentQ.substring(0, 50)}..."`);
             }
             currentQ = qMatch[1].trim();
             currentA = '';
@@ -1062,8 +1071,13 @@ function parseQAResponse(text) {
     // 最後のQ&Aを追加
     if (currentQ && currentA) {
         qaList.push({ question: currentQ, answer: currentA, type: currentType });
+        console.log(`  ✓ Parsed final Q&A #${qaList.length}: Q="${currentQ.substring(0, 50)}..."`);
     }
     console.log(`📋 Parsed ${qaList.length} Q&A pairs from response`);
+    if (qaList.length === 0) {
+        console.error('⚠️ WARNING: Parsed 0 Q&As! Response text:');
+        console.error(text.substring(0, 1000));
+    }
     return qaList;
 }
 async function generateQA(content, maxQA = 5, language = 'ja', productUrl, isOCRMode = false, qaType = 'collected') {
@@ -1853,11 +1867,11 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
         // デフォルト値を40→20に削減してタイムアウトを防ぐ
         let maxQA = req.body.maxQA ? parseInt(req.body.maxQA, 10) : 20;
         const language = req.body.language || 'ja';
-        // 製品情報が検出されない場合、maxQAを大幅に削減（3個のみ）
+        // 製品情報が検出されない場合、maxQAを削減（ただし最低10個は確保）
         if (!hasProduct && combinedText.length < 2000) {
-            console.warn(`⚠️ CRITICAL WARNING: OCR text appears to be mostly UI elements, not product info!`);
-            console.warn(`  Reducing maxQA from ${maxQA} to 3 to avoid generating irrelevant Q&As`);
-            maxQA = Math.min(maxQA, 3);
+            console.warn(`⚠️ WARNING: OCR text appears to be mostly UI elements, not product info!`);
+            console.warn(`  Reducing maxQA from ${maxQA} to 10 (minimum) to avoid generating irrelevant Q&As`);
+            maxQA = Math.max(Math.min(maxQA, 10), 5); // 最低5個、最大10個
         }
         console.log('\n🤖 Q&A生成を開始...');
         console.log('  - maxQA (adjusted):', maxQA);
