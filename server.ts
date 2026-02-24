@@ -2717,6 +2717,29 @@ const server = app.listen(port, '0.0.0.0', () => {
   console.log('Dist path:', distPath);
   console.log('API Key configured:', !!process.env.OPENAI_API_KEY);
   console.log(`🚀 Ready to accept connections from Fly.io proxy`);
+  
+  // メモリ使用状況をログ出力
+  const memUsage = process.memoryUsage();
+  console.log(`💾 Memory: RSS=${(memUsage.rss / 1024 / 1024).toFixed(2)}MB, Heap=${(memUsage.heapUsed / 1024 / 1024).toFixed(2)}MB / ${(memUsage.heapTotal / 1024 / 1024).toFixed(2)}MB`);
+  
+  // 定期的にメモリ使用状況を監視（5分ごと）
+  setInterval(() => {
+    const mem = process.memoryUsage();
+    const usedMB = (mem.heapUsed / 1024 / 1024).toFixed(2);
+    const totalMB = (mem.heapTotal / 1024 / 1024).toFixed(2);
+    const rssMB = (mem.rss / 1024 / 1024).toFixed(2);
+    console.log(`💾 [Monitor] RSS=${rssMB}MB, Heap=${usedMB}MB / ${totalMB}MB`);
+    
+    // メモリ使用率が80%を超えたら警告
+    if (mem.heapUsed / mem.heapTotal > 0.8) {
+      console.warn(`⚠️ High memory usage: ${((mem.heapUsed / mem.heapTotal) * 100).toFixed(1)}%`);
+      // ガベージコレクションを手動実行（--expose-gc フラグが必要）
+      if (global.gc) {
+        console.log('🧹 Running manual garbage collection...');
+        global.gc();
+      }
+    }
+  }, 300000); // 5分ごと
 });
 
 // タイムアウト設定を延長（Playwright処理のため）

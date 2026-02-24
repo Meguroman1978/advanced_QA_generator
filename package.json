@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "server": "node --loader tsx --no-warnings server.ts",
     "server:advanced": "tsx server-advanced.ts",
-    "start": "node server.js",
+    "start": "node --max-old-space-size=1536 --expose-gc server.js",
     "start:dev": "tsx server.ts"
   },
   "dependencies": {
