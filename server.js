@@ -14,6 +14,98 @@ import { chromium } from 'playwright-core';
 import multer from 'multer';
 import Tesseract from 'tesseract.js';
 dotenv.config();
+// 薬機法：化粧品の効能範囲（許可された表現）
+const ALLOWED_COSMETIC_EFFECTS = [
+    '頭皮、毛髪を清浄にする',
+    '香りにより毛髪、頭皮の不快臭を抑える',
+    '頭皮、毛髪をすこやかに保つ',
+    '毛髪にはり、こしを与える',
+    '頭皮、毛髪にうるおいを与える',
+    '頭皮、毛髪のうるおいを保つ',
+    '毛髪をしなやかにする',
+    'クシどおりをよくする',
+    '毛髪のつやを保つ',
+    '毛髪につやを与える',
+    'フケ、カユミがとれる',
+    'フケ、カユミを抑える',
+    '毛髪の水分、油分を補い保つ',
+    '裂毛、切毛、枝毛を防ぐ',
+    '髪型を整え、保持する',
+    '毛髪の帯電を防止する',
+    '皮膚を清浄にする',
+    'ニキビ、アセモを防ぐ',
+    '肌を整える',
+    '肌のキメを整える',
+    '皮膚をすこやかに保つ',
+    '肌荒れを防ぐ',
+    '肌をひきしめる',
+    '皮膚にうるおいを与える',
+    '皮膚の水分、油分を補い保つ',
+    '皮膚の柔軟性を保つ',
+    '皮膚を保護する',
+    '皮膚の乾燥を防ぐ',
+    '肌を柔らげる',
+    '肌にはりを与える',
+    '肌にツヤを与える',
+    '肌を滑らかにする',
+    'ひげを剃りやすくする',
+    'ひげそり後の肌を整える',
+    'あせもを防ぐ',
+    '日やけを防ぐ',
+    '日やけによるシミ、ソバカスを防ぐ',
+    '芳香を与える',
+    '爪を保護する',
+    '爪をすこやかに保つ',
+    '爪にうるおいを与える',
+    '口唇の荒れを防ぐ',
+    '口唇のキメを整える',
+    '口唇にうるおいを与える',
+    '口唇をすこやかにする',
+    '口唇を保護する',
+    '口唇の乾燥を防ぐ',
+    '口唇の乾燥によるカサツキを防ぐ',
+    '口唇を滑らかにする',
+    '歯を白くする',
+    '歯垢を除去する',
+    '口中を浄化する',
+    '口臭を防ぐ',
+    'むし歯を防ぐ',
+    '歯のやにを取る',
+    '歯石の沈着を防ぐ',
+    '乾燥による小ジワを目立たなくする'
+];
+// 薬機法違反の可能性がある表現（NGワード）
+const PROHIBITED_EXPRESSIONS = [
+    // 医薬品的効能効果
+    '治す', '治る', '治療', '改善', '回復', '再生', '修復',
+    '緩和', '予防', '防止',
+    // 身体の組織機能への言及
+    '細胞', '活性化', '代謝', '血行促進', '新陳代謝',
+    '老化防止', 'アンチエイジング', '若返り', 'リフトアップ',
+    // 医学的表現
+    '効く', '効果', '有効', '臨床', '医学的', '科学的に証明',
+    // 肌質改善
+    'シミを消す', 'シミが消える', 'シミを取る', 'シミが取れる',
+    'シワを消す', 'シワが消える', 'シワを取る', 'シワが取れる',
+    'ニキビが治る', 'ニキビを治す', 'ニキビ改善',
+    'たるみを解消', 'たるみ改善', 'たるみを治す',
+    '美白効果', '美白する', '白くする', '色白',
+    // 身体変化
+    '痩せる', 'ダイエット効果', '脂肪燃焼', '減量',
+    'バストアップ', '豊胸'
+];
+// 薬機法コンプライアンスチェック関数
+function checkCosmeticCompliance(answer) {
+    const lowerAnswer = answer.toLowerCase();
+    // 禁止表現をチェック
+    for (const prohibited of PROHIBITED_EXPRESSIONS) {
+        if (answer.includes(prohibited)) {
+            console.log(`⚠️ 薬機法注意: "${prohibited}" が検出されました`);
+            return true; // 違反の可能性あり
+        }
+    }
+    return false; // 問題なし
+}
 // ES Moduleで__dirnameを取得
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1588,6 +1680,11 @@ app.post('/api/workflow', async (req, res) => {
         const qaItems = await Promise.all(qaList.map(async (qa, index) => {
             const needsVideo = needsVideoExplanation(qa.question, qa.answer);
             console.error(`DEBUG Q${index + 1} needsVideo: ${needsVideo} - Q: ${qa.question.substring(0, 50)}`);
+            // 薬機法コンプライアンスチェック
+            const hasComplianceRisk = checkCosmeticCompliance(qa.answer);
+            if (hasComplianceRisk) {
+                console.warn(`⚠️ 薬機法注意 Q${index + 1}: ${qa.question.substring(0, 50)}`);
+            }
             // Q&Aの種類を決定
             // 混在モードの場合: LLMが分類したtypeを使用
             // 単一モードの場合: ユーザーの選択を使用
@@ -1602,7 +1699,8 @@ app.post('/api/workflow', async (req, res) => {
                 sourceType: 'text',
                 url: url, // 元のURLを追加
                 timestamp: Date.now(),
-                needsVideo: needsVideo
+                needsVideo: needsVideo,
+                complianceWarning: hasComplianceRisk // 薬機法注意フラグ
             };
             // 動画推奨がある場合、OpenAI APIで具体的な理由と例を生成
             if (needsVideo) {
@@ -2195,6 +2293,11 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
         const openai = apiKey ? new OpenAI({ apiKey }) : null;
         const qaItems = await Promise.all(qaList.map(async (qa, index) => {
             const needsVideo = needsVideoExplanation(qa.question, qa.answer);
+            // 薬機法コンプライアンスチェック（OCRモード）
+            const hasComplianceRisk = checkCosmeticCompliance(qa.answer);
+            if (hasComplianceRisk) {
+                console.warn(`⚠️ [OCR] 薬機法注意 Q${index + 1}: ${qa.question.substring(0, 50)}`);
+            }
             // Q&Aの種類を決定
             const qaSource = (includeTypes.collected && includeTypes.suggested) ? (qa.type || 'collected') :
                 includeTypes.suggested ? 'suggested' :
@@ -2206,7 +2309,8 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
                 source: qaSource,
                 sourceType: 'image-ocr',
                 url: url || 'ocr-images',
-                needsVideo: needsVideo
+                needsVideo: needsVideo,
+                complianceWarning: hasComplianceRisk // 薬機法注意フラグ（OCRモード）
             };
             // 動画推奨がある場合、OpenAI APIで具体的な理由と例を生成
             if (needsVideo && openai) {

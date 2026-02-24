@@ -13,6 +13,7 @@ interface WorkflowResult {
     needsVideo?: boolean;
     videoReason?: string;
     videoExamples?: string[];
+    complianceWarning?: boolean;  // 薬機法注意フラグ
   }>;
 }
 
@@ -541,9 +542,50 @@ HTMLが貼り付けられると、ここに <!DOCTYPE html>... のようなコ�
 
             <div className="result-section">
               <h3>❓ 生成されたQ&A</h3>
-              <div className="qa-box">
-                {result.qaResult}
-              </div>
+              {result.qaItems && result.qaItems.length > 0 ? (
+                <div className="qa-items-detailed">
+                  {result.qaItems.map((qa, index) => (
+                    <div key={qa.id} className="qa-item-card">
+                      <div className="qa-item-header">
+                        <span className="qa-number">Q{index + 1}</span>
+                        {qa.complianceWarning && (
+                          <span className="compliance-warning-badge">⚠️ 薬機法注意</span>
+                        )}
+                        {qa.needsVideo && (
+                          <span className="video-badge">🎥 動画推奨</span>
+                        )}
+                      </div>
+                      <div className="qa-question">
+                        <strong>Q:</strong> {qa.question}
+                      </div>
+                      <div className="qa-answer">
+                        <strong>A:</strong> {qa.answer}
+                      </div>
+                      {qa.needsVideo && qa.videoReason && (
+                        <div className="video-suggestion">
+                          <div className="video-reason">
+                            <strong>動画推奨理由:</strong> {qa.videoReason}
+                          </div>
+                          {qa.videoExamples && qa.videoExamples.length > 0 && (
+                            <div className="video-examples">
+                              <strong>動画例:</strong>
+                              <ul>
+                                {qa.videoExamples.map((example, i) => (
+                                  <li key={i}>{example}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="qa-box">
+                  {result.qaResult}
+                </div>
+              )}
             </div>
 
             <div className="result-section">
