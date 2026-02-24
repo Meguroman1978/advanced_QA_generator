@@ -164,11 +164,10 @@ async function fetchWithBrowser(url) {
                 '--disable-default-apps',
                 '--no-first-run'
             ],
-            timeout: 30000
+            timeout: 60000 // 60秒に延長
         });
         // ドメイン情報を取得（Referer用）
         const domain = new URL(url).origin;
-        const topPageUrl = `${domain}/hankyu-beauty/`;
         const context = await browser.newContext({
             userAgent: randomUserAgent,
             viewport: { width: 1920, height: 1080 },
@@ -179,13 +178,12 @@ async function fetchWithBrowser(url) {
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                 'Accept-Encoding': 'gzip, deflate, br',
                 'Cache-Control': 'max-age=0',
-                'Referer': topPageUrl, // 🔥 重要: トップページから遷移したように見せる
                 'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
                 'Sec-Ch-Ua-Mobile': '?0',
                 'Sec-Ch-Ua-Platform': '"Windows"',
                 'Sec-Fetch-Dest': 'document',
                 'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'same-origin', // 🔥 none → same-origin（同じサイト内遷移）
+                'Sec-Fetch-Site': 'none',
                 'Sec-Fetch-User': '?1',
                 'Upgrade-Insecure-Requests': '1',
                 'DNT': '1' // Do Not Track（プライバシー配慮）
@@ -215,37 +213,49 @@ async function fetchWithBrowser(url) {
       );
     `);
         console.log(`⏳ Navigating to ${url}...`);
-        // まずトップページにアクセス（クッキー・セッション確立）
-        console.log(`🏠 First accessing homepage: ${topPageUrl}`);
-        try {
-            await page.goto(topPageUrl, {
-                waitUntil: 'networkidle',
-                timeout: 30000
-            });
-            console.log(`✅ Homepage loaded, waiting for cookies...`);
-            // クッキーを確認してログ出力
-            const cookies = await context.cookies();
-            console.log(`🍪 Received ${cookies.length} cookies from homepage`);
-            // ランダム待機（3-5秒）でボット検出を回避
-            const randomWait1 = Math.floor(Math.random() * 2000) + 3000; // 3000-5000ms
-            console.log(`⏳ Random wait: ${randomWait1}ms`);
-            await page.waitForTimeout(randomWait1);
-        }
-        catch (error) {
-            console.warn(`⚠️ Homepage access failed, continuing anyway...`);
-        }
-        // 本来のURLにアクセス（Refererは自動で前のページになる）
-        console.log(`🎯 Now accessing target URL: ${url}`);
+        // ページにアクセス
         await page.goto(url, {
-            waitUntil: 'load', // domcontentloaded → load に変更
+            waitUntil: 'domcontentloaded',
             timeout: 90000 // 90秒に延長
         });
-        // ランダム待機（5-8秒）
-        const randomWait2 = Math.floor(Math.random() * 3000) + 5000; // 5000-8000ms
-        console.log(`⏳ Waiting for JavaScript execution (${randomWait2}ms)...`);
-        await page.waitForTimeout(randomWait2);
+        // Cloudflareチャレンジを検出
+        const pageContent = await page.content();
+        const isCloudflareChallenge = pageContent.includes('Just a moment') ||
+            pageContent.includes('challenge-platform') ||
+            pageContent.includes('cf_chl_opt');
+        if (isCloudflareChallenge) {
+            console.log(`🛡️ Cloudflare challenge detected, waiting for resolution...`);
+            // Cloudflareチャレンジ解決を待つ（最大30秒）
+            try {
+                await page.waitForFunction(`() => {
+            const body = document.body.innerHTML;
+            return !body.includes('Just a moment') && 
+                   !body.includes('challenge-platform') &&
+                   body.length > 5000;
+          }`, { timeout: 30000 });
+                console.log(`✅ Cloudflare challenge resolved`);
+            }
+            catch (timeoutErr) {
+                console.warn(`⚠️ Cloudflare challenge timeout, attempting to continue...`);
+            }
+            // 追加の待機
+            await page.waitForTimeout(5000);
+        }
+        else {
+            // 通常のJavaScript実行を待つ
+            console.log(`⏳ Waiting for JavaScript execution...`);
+            await page.waitForTimeout(5000);
+        }
+        // ネットワークアイドルを待つ（追加の安全策）
+        try {
+            await page.waitForLoadState('networkidle', { timeout: 15000 });
+            console.log(`✅ Network is idle`);
+        }
+        catch {
+            console.warn(`⚠️ Network idle timeout, continuing anyway...`);
+        }
         // 人間らしいスクロール動作（ランダム化）
-        console.log(`🖱️ Simulating human scrolling and interaction...`);
+        console.log(`🖱️ Simulating human scrolling...`);
         // ランダムなスクロール位置（300-500px）
         const scroll1 = Math.floor(Math.random() * 200) + 300;
         await page.evaluate(`window.scrollTo({top: ${scroll1}, behavior: "smooth"})`);
@@ -1557,9 +1567,27 @@ app.post('/api/workflow', async (req, res) => {
         }
         // ステップ2: HTMLからコンテンツを抽出
         console.log('Extracting content...');
-        const extractedContent = extractContent(html);
+        let extractedContent = extractContent(html);
         diagnostics.contentLength = extractedContent.length;
-        // コンテンツが短すぎる場合は警告（ただし、50文字以上ならQ&A生成を試行）
+        // コンテンツが短すぎる場合、Playwrightフォールバックを試行
+        if (extractedContent.length < 50 && url && !sourceCode) {
+            console.warn(`⚠️ Content too short (${extractedContent.length} chars), trying Playwright fallback...`);
+            try {
+                console.log(`🔄 Attempting Playwright browser fetch...`);
+                const browserHtml = await fetchWithBrowser(url);
+                console.log(`✅ Playwright fetch succeeded, re-extracting content...`);
+                extractedContent = extractContent(browserHtml);
+                diagnostics.contentLength = extractedContent.length;
+                diagnostics.playwrightUsed = true;
+                html = browserHtml; // Update html for diagnostics
+                console.log(`📊 After Playwright: content length = ${extractedContent.length} chars`);
+            }
+            catch (playwrightError) {
+                console.error(`❌ Playwright fallback failed:`, playwrightError);
+                // Continue with original short content
+            }
+        }
+        // コンテンツが依然として短すぎる場合はエラー
         if (extractedContent.length < 50) {
             console.warn(`⚠️ Content too short: ${extractedContent.length} characters`);
             console.warn(`📄 Extracted content: "${extractedContent}"`);
@@ -1567,8 +1595,8 @@ app.post('/api/workflow', async (req, res) => {
             console.warn(`📄 HTML preview: ${html.substring(0, 500)}`);
             return res.status(400).json({
                 success: false,
-                error: 'コンテンツが短すぎます。HTMLソースコードが正しく貼り付けられているか確認してください。\n\n提案:\n1. ブラウザで「ページのソースを表示」（Ctrl+U / Cmd+U）から完全なHTMLをコピー\n2. または、製品ページのURLを直接入力してください（URLモード推奨）',
-                details: `抽出されたコンテンツ長: ${extractedContent.length}文字\n元のHTML長: ${html.length}文字\n\n抽出されたコンテンツ:\n${extractedContent}\n\nHTML先頭200文字:\n${html.substring(0, 200)}`
+                error: `コンテンツが短すぎます。\n\n抽出できたテキスト長: ${extractedContent.length}文字\n\n考えられる原因:\n1. サイトがCloudflare等で保護されており、アクセスをブロックしている\n2. JavaScriptで動的に生成されるコンテンツで、取得に失敗した\n3. ログインが必要なページである\n\n対処方法:\n✅ 推奨: ブラウザ拡張機能を使用して「HTMLソースコード」モードで生成してください\n   - ブラウザで対象ページを開く\n   - 「ページのソースを表示」（Ctrl+U / Cmd+U）\n   - 完全なHTMLをコピー&ペースト\n\nまたは、別のURLをお試しください。`,
+                details: `抽出されたコンテンツ長: ${extractedContent.length}文字\n元のHTML長: ${html.length}文字\nPlaywright使用: ${diagnostics.playwrightUsed ? 'はい' : 'いいえ'}\n\n抽出されたコンテンツ:\n${extractedContent}\n\nHTML先頭500文字:\n${html.substring(0, 500)}`
             });
         }
         // 50-200文字の場合は警告を出すが続行
@@ -2211,7 +2239,12 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req, res) => {
                 includeTypes.suggested ? 'suggested' :
                     'collected';
             console.log(`[OCR] Q&A Type: ${qaType}`);
-            qaList = await generateQA(combinedText, maxQA, language, url, true, qaType); // OCR mode
+            // タイムアウト付きでQ&A生成を実行（120秒）
+            const generateQAPromise = generateQA(combinedText, maxQA, language, url, true, qaType); // OCR mode
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Q&A generation timeout after 120 seconds')), 120000);
+            });
+            qaList = await Promise.race([generateQAPromise, timeoutPromise]);
             console.log(`✅ ${qaList.length}個のQ&Aを生成しました`);
             console.log('📊 Q&A生成結果の詳細:');
             console.log('  - 生成されたQ&A数:', qaList.length);
