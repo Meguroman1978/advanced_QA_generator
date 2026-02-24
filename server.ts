@@ -273,7 +273,7 @@ async function fetchWithBrowser(url: string): Promise<string> {
     if (isCloudflareChallenge) {
       console.log(`🛡️ Cloudflare challenge detected, waiting for resolution...`);
       
-      // Cloudflareチャレンジ解決を待つ（最大30秒）
+      // Cloudflareチャレンジ解決を待つ（最大20秒）
       try {
         await page.waitForFunction(
           `() => {
@@ -282,15 +282,15 @@ async function fetchWithBrowser(url: string): Promise<string> {
                    !body.includes('challenge-platform') &&
                    body.length > 5000;
           }`,
-          { timeout: 30000 }
+          { timeout: 20000 } // 30秒→20秒に短縮
         );
         console.log(`✅ Cloudflare challenge resolved`);
       } catch (timeoutErr) {
         console.warn(`⚠️ Cloudflare challenge timeout, attempting to continue...`);
       }
       
-      // 追加の待機
-      await page.waitForTimeout(5000);
+      // 追加の待機を短縮
+      await page.waitForTimeout(3000); // 5秒→3秒
     } else {
       // 通常のJavaScript実行を待つ
       console.log(`⏳ Waiting for JavaScript execution...`);
@@ -2511,10 +2511,10 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
       
       console.log(`[OCR] Q&A Type: ${qaType}`);
       
-      // タイムアウト付きでQ&A生成を実行（120秒）
+      // タイムアウト付きでQ&A生成を実行（300秒 = 5分）
       const generateQAPromise = generateQA(combinedText, maxQA, language, url, true, qaType); // OCR mode
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Q&A generation timeout after 120 seconds')), 120000);
+        setTimeout(() => reject(new Error('Q&A generation timeout after 300 seconds (5 minutes)')), 300000); // 120秒→300秒に延長
       });
       
       qaList = await Promise.race([generateQAPromise, timeoutPromise]);
