@@ -18,6 +18,8 @@
     "start:dev": "tsx server.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@google/generative-ai": "^0.24.1",
     "@pdf-lib/fontkit": "^1.1.1",
     "@types/archiver": "^7.0.0",
     "@types/cors": "^2.8.19",

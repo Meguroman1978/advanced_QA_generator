@@ -3,6 +3,8 @@ import cors from 'cors';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -1013,655 +1015,291 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
   }
 }
 
-async function generateQA(content: string, maxQA: number = 5, language: string = 'ja', productUrl?: string, isOCRMode: boolean = false, qaType: 'collected' | 'suggested' | 'mixed' = 'collected'): Promise<Array<{question: string, answer: string, type?: 'collected' | 'suggested'}>> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  
-  console.log('API Key check:', apiKey ? `Found (length: ${apiKey.length})` : 'NOT FOUND');
-  console.log('Generating Q&A:', { maxQA, language, contentLength: content.length });
-  
-  if (!apiKey) {
-    throw new Error('OpenAI API key is not configured');
-  }
+// ========== Multi-LLM Support Functions ==========
 
-  const openai = new OpenAI({
-    apiKey: apiKey
-  });
-
-  // コンテンツが少ない場合の対応
-  // 重要な修正: URLモードは常に厳格なプロンプトを使用する
-  // - OCRモード: 常に緩いプロンプト（ノイジーなデータのため）
-  // - URLモード: 常に厳格なプロンプト（extractContent()の出力は高品質のため）
-  const isLowContent = content.length < 500;
-  const isVeryLowContent = isOCRMode ? true : false; // URLモードは常にfalse（厳格）
+/**
+ * 簡潔なプロンプトを生成 (トークン数を50%削減)
+ */
+function generateCompactPrompt(content: string, maxQA: number, language: string, qaType: 'collected' | 'suggested' | 'mixed'): string {
+  // コンテンツを2000文字に制限（トークン節約）
+  const trimmedContent = content.length > 2000 ? content.substring(0, 2000) + '\n...(省略)' : content;
   
-  console.log(`🔍 Content quality assessment:`);
-  console.log(`  - isOCRMode: ${isOCRMode}`);
-  console.log(`  - content.length: ${content.length}`);
-  console.log(`  - isVeryLowContent: ${isVeryLowContent} (${isOCRMode ? 'OCR mode - always true' : 'URL mode - based on length'})`);
+  const forbiddenWords = '「店舗」「在庫」「購入」「配送」「送料」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」';
   
-  const contentNote = isLowContent 
-    ? `\n\n⚠️ 注意: ソーステキストが少ない場合でも、必ずソーステキストの情報のみを使用してください。外部情報や一般知識を追加しないでください。テキストから読み取れる情報を複数の角度から深掘りして${maxQA}個のQ&Aを作成してください。`
-    : isOCRMode
-    ? `\n\n⚠️ 注意: OCRで抽出されたテキストの場合、完璧でないことがあります。読み取れる商品情報（商品名、価格、特徴など）から、可能な限り${maxQA}個に近いQ&Aを作成してください。最低でも${Math.floor(maxQA * 0.3)}個以上のQ&Aを生成してください。`
-    : '';
-  
-  // Q&A種類に応じた追加指示
-  const qaTypeNote = qaType === 'collected'
-    ? `\n\n📋 【Q&A種類: 収集情報ベース】\n**重要**: ソーステキストに明確に記載されている情報のみからQ&Aを作成してください。\n推測や一般知識を含めてはいけません。記載されている事実のみを使用してください。`
+  const qaTypeInstructions = qaType === 'collected'
+    ? '**重要**: ソーステキストに明記された情報のみを使用。推測禁止。'
     : qaType === 'suggested'
-    ? `\n\n💭 【Q&A種類: 想定FAQ（ユーザー視点）】\n**重要**: ソーステキストの商品情報を元に、ユーザーが知りたいであろう**商品そのものの使い方・特徴**を推論・補足してください。\n「特に記載がありませんが、一般的には...」「通常は...」のような表現を使用可能です。\n\n🚫 **絶対厳守**: 想定Q&Aでも、店舗・在庫・購入・配送などサイト機能についての質問は**絶対に作成禁止**です。\n商品の使い方・お手入れ・適した季節・コーディネート例など、**商品そのもの**についてのみ想定してください。`
-    : `\n\n📊 【Q&A種類: 混在（収集+想定）】\nソーステキストに明記された情報と、ユーザー視点の想定Q&Aの両方を生成してください。\n\n🚫 想定Q&Aでも、店舗・在庫・購入・配送などは**絶対禁止**です。`;
+    ? '**重要**: 商品の使い方・特徴を推論・補足可能。「一般的には...」等の表現OK。サイト機能についての質問は厳禁。'
+    : '収集情報と想定FAQの両方を生成。各Q&AにType: collected/suggestedを付与。';
+  
+  if (language === 'ja') {
+    return `あなたは商品Q&A作成の専門家です。以下のソーステキストから、**商品そのもの**（名称、色、素材、サイズ、機能、価格）について日本語で${maxQA}個のQ&Aを作成してください。
 
-  const languagePrompts: Record<string, string> = {
-    ja: `${isVeryLowContent ? '' : '🚫🚫🚫 絶対禁止事項 🚫🚫🚫\n'}${isVeryLowContent ? '⚠️ 避けるべき語句:\n' : '以下の語句を含む質問は**絶対に作成してはいけません**:\n'}「店舗」「在庫」「購入」「配送」「送料」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認」「表示」「数分」「反映」「遅延」「リアルタイム」
+${qaTypeInstructions}
 
-${isVeryLowContent ? 'これらの語句を含む質問は避けてください。ただし、商品情報が読み取れる場合は、商品に関するQ&Aを優先してください。' : 'これらの語句が含まれる質問を1つでも作成した場合、タスクは完全に失敗します。'}
+🚫 **絶対禁止**: 以下の語句を含む質問は作成禁止: ${forbiddenWords}
 
-🎯 【最重要ミッション】
-あなたの唯一の仕事は「**商品の物理的な特徴**」についてのQ&Aを作成することです。
-- 商品名・型番
-- 色・デザイン
-- 素材・材質
-- サイズ・寸法
-- 機能・性能
-- 価格
+✅ **作成すべき質問**: 商品名、素材、サイズ、色、機能、価格、お手入れ方法、使用シーン
 
-サイトの使い方、購入手順、会員サービス、配送情報、店舗情報などは**完全に無視**してください。
-
-あなたは商品専門のQ&A作成エキスパートです。以下のソーステキストから、このページで紹介されている**メイン商品のみ**について、日本語で${maxQA}個のQ&Aを作成してください。
-
-【絶対守るべきルール】
-1. ✅ 言語: 質問と回答は100%日本語で書くこと（英語禁止）
-2. ✅ 数量: 必ず${maxQA}個の異なるQ&Aを生成すること
-3. ✅ 品質: 各Q&Aは完全にユニークで、異なる角度からの質問であること
-4. ❌ 重複禁止: 同じまたは類似した質問を繰り返さないこと
-5. 🎯 【絶対厳守】**メイン商品そのもの**についてのみQ&Aを作成すること
-   - 商品の物理的特徴（デザイン、色、素材、サイズ、重さ）
-   - 商品の機能・性能・スペック
-   - 商品の使い方・お手入れ方法
-   - 商品の価格・モデル番号・バリエーション
-   - ソーステキストに明記された商品固有の情報のみ使用
-   
-6. 🚫 【完全禁止】以下の内容は**1つも含めてはいけません**:
-   ❌ サイトの機能: 「購入方法」「支払い方法」「会員登録」「ログイン」
-   ❌ 配送・物流: 「配送料」「配送方法」「お届け日数」「配送先変更」
-   ❌ 店舗情報: 「実店舗の在庫」「店舗の場所」「営業時間」「他店舗」
-   ❌ ポイント・特典: 「ポイント付与」「クーポン使用」「キャンペーン」
-   ❌ アフターサービス: 「返品方法」「交換方法」「保証内容」「修理」
-   ❌ レビュー・コミュニティ: 「レビューの書き方」「口コミ投稿」
-   ❌ 会社・サイト情報: 「運営会社」「お問い合わせ」「プライバシーポリシー」
-   ❌ 在庫・入荷: 「入荷予定」「再入荷通知」「在庫状況の確認方法」（商品ページに明記された在庫情報は可）
-
-【Q&A作成の具体例】
-✅ **良い質問の例（商品そのものについて）**:
-- 「この商品の正式名称と型番は何ですか？」
-- 「この商品の主な素材は何ですか？」
-- 「このキャップのサイズ調整機能はありますか？」
-- 「この商品のカラーバリエーションは何色ありますか？」
-- 「この商品の重さはどのくらいですか？」
-- 「この商品の価格はいくらですか？」
-- 「このデザインの特徴的な部分はどこですか？」
-- 「この商品はどのような場面で使用できますか？」
-- 「この商品のお手入れ方法は？」
-- 「このモデルと他のモデルの違いは何ですか？」
-
-❌ **禁止されている質問の種類（絶対作成禁止）**:
-- サイト機能に関する質問（例: 購入方法、会員登録手順など）
-- 配送サービスに関する質問（例: 配送料、配送日数など）
-- 店舗システムに関する質問（例: 実店舗の場所、営業時間など）
-- 在庫管理に関する質問（例: 入荷予定、在庫確認方法など）
-- 返品・交換ポリシーに関する質問
-- ポイントサービスに関する質問
-- レビュー投稿機能に関する質問
-
-【Q&A作成の視点】（**商品の物理的・機能的特徴のみ**）
-以下の情報を**ソーステキストから**抽出してQ&Aを作成:
-1. **商品識別情報**: 正式名称、型番、ブランド、シリーズ名
-2. **外観・デザイン**: 色、柄、形状、スタイル、ロゴ、装飾
-3. **素材・材質**: 生地、素材の種類、質感、肌触り
-4. **サイズ・寸法**: 具体的な寸法、調整可能範囲、フィット感
-5. **機能・性能**: 特殊機能、防水性、通気性、耐久性
-6. **使用方法**: 着用方法、お手入れ、保管方法、注意点
-7. **価格・バリエーション**: 税込価格、色違い、サイズ違い
-8. **ターゲット・用途**: 推奨ユーザー、使用シーン、季節
-9. **他製品との比較**: 同シリーズ内での違い、特徴的な点
-
-⚠️ **重要な注意**:
-- もしソーステキストに商品情報が少なく、サイト機能の説明ばかりの場合でも、
-  **絶対にサイト機能についてのQ&Aを作らないでください**
-- その場合は、わずかな商品情報から可能な限りQ&Aを作成してください
-- サイト機能の質問を作るくらいなら、Q&A数が少なくても構いません${contentNote}${qaTypeNote}
-
-【出力フォーマット - 必ず守る】
-${qaType === 'mixed' ? `
-各Q&Aについて、以下のフォーマットで出力してください：
-
-Q1: [日本語の質問]
-A1: [日本語の詳細な回答 - ソーステキストの情報のみ]
-Type1: collected または suggested
-
-- **Type: collected** = ソーステキストに明記されている事実（例: 商品名、価格、サイズ、素材など）
-- **Type: suggested** = ソーステキストに明記されていないが推論・補足した内容（例: 「記載はありませんが、一般的には...」など）
-
-判定基準:
-✅ Type: collected - 回答がソーステキストから直接引用または明確に記載されている
-✅ Type: suggested - 回答が「記載なし」「情報なし」または一般論・推論を含む
-
-Q2: [日本語の質問]
-A2: [日本語の詳細な回答]
-Type2: collected または suggested
-
-...Q${maxQA}まで続ける
-` : `
-Q1: [日本語の質問]
-A1: [日本語の詳細な回答 - ソーステキストの情報のみ]
-
-Q2: [日本語の質問]
-A2: [日本語の詳細な回答 - ソーステキストの情報のみ]
-
-...Q${maxQA}まで続ける
-`}
+【出力フォーマット】
+${qaType === 'mixed' ? 'Q1: [質問]\nA1: [回答]\nType1: collected または suggested\n\nQ2: ...' : 'Q1: [質問]\nA1: [回答]\n\nQ2: ...'}
 
 【ソーステキスト】
-${content}
+${trimmedContent}
 
-【最重要】
-- **可能な限り${maxQA}個に近いQ&Aを日本語で生成してください**（最低でも${isVeryLowContent ? Math.floor(maxQA * 0.3) : Math.floor(maxQA * 0.5)}個以上）
-- すべての回答はソーステキストに記載されている情報のみを使用してください
-- ソーステキストに記載されていない商品や情報については一切言及しないでください
-- **情報が限られている場合でも、既存の情報から異なる角度や視点で質問を生成してください**
-- OCRテキストの場合、不完全な文字でも推測せずに、読み取れる部分のみを使用してください
+必ず${maxQA}個のQ&Aを生成してください。`;
+  } else if (language === 'en') {
+    return `You are a product Q&A expert. Create ${maxQA} Q&A pairs in ENGLISH about **the product itself** (name, color, material, size, function, price) from the source text below.
 
-【生成後の最終確認 - 必須】
-🚨🚨🚨 **CRITICAL: 以下の禁止単語を含む質問は絶対に出力してはいけません** 🚨🚨🚨
+${qaTypeInstructions.replace('ソーステキスト', 'source text').replace('推測禁止', 'no guessing').replace('サイト機能', 'site features')}
 
-禁止単語リスト:
-「店舗」「在庫」「購入」「配送」「送料」「ポイント」「会員」「返品」「交換」「保証」「レビュー」「口コミ」「問い合わせ」「登録」「ログイン」「支払」「決済」「入荷」「再入荷」「確認」「表示」「反映」「遅延」「リアルタイム」「数分」
+🚫 **FORBIDDEN**: Do NOT create questions containing: "store" "inventory" "purchase" "shipping" "fee" "points" "member" "return" "exchange" "warranty" "review" "contact" "register" "login" "payment" "checkout" "restock"
 
-生成したすべてのQ&Aを1つずつチェックし、上記の禁止単語が**1つでも**含まれている質問は完全に削除してください。
+✅ **CREATE**: Product name, material, size, color, features, price, care instructions, usage scenarios
 
-✅ **想定Q&Aで作成すべき内容**:
-- 商品の使い方・お手入れ方法
-- 適した季節・シーン
-- コーディネート・スタイリング
-- 商品の特徴・魅力
-- サイズ感・フィット感
-
-❌ **想定Q&Aでも絶対作成禁止**:
-- サイト機能・システム関連
-- 購入・配送・在庫管理
-- 会員・ポイントサービス
-
-削除後、残ったQ&Aのみを出力してください。`,
-    en: `${isVeryLowContent ? '' : '🚫🚫🚫 ABSOLUTELY FORBIDDEN 🚫🚫🚫\n'}${isVeryLowContent ? '⚠️ Words to avoid:\n' : 'You MUST NOT create questions containing ANY of these words:\n'}"store" "inventory" "stock" "purchase" "buy" "shipping" "delivery" "fee" "points" "member" "return" "exchange" "warranty" "review" "comment" "contact" "register" "login" "payment" "checkout" "restock" "check" "confirm" "display" "real-time" "reflect" "delay" "minutes"
-
-${isVeryLowContent ? 'Avoid questions with these words, but prioritize product-related Q&As if product information is readable.' : 'If you create even ONE question with these words, the task is COMPLETELY FAILED.'}
-
-🎯 【PRIMARY MISSION】
-Your ONLY job is to create Q&As about **THE PRODUCT'S PHYSICAL FEATURES**:
-- Product name & model number
-- Color & design
-- Material & fabric
-- Size & dimensions
-- Functions & performance
-- Price
-
-COMPLETELY IGNORE site features, purchasing process, membership, shipping info, store info, etc.
-
-You are a product-focused Q&A expert. Create ${maxQA} Q&A pairs in ENGLISH about **THE MAIN PRODUCT ONLY** featured on this page.
-
-【ABSOLUTE RULES】
-1. ✅ LANGUAGE: Write 100% in ENGLISH (NO other languages)
-2. ✅ QUANTITY: Generate EXACTLY ${maxQA} distinct Q&A pairs
-3. ✅ QUALITY: Each Q&A must be completely unique with different angles
-4. ❌ NO DUPLICATES: Do NOT repeat similar questions
-5. 🎯 【STRICTLY ENFORCE】Create Q&A about **THE PRODUCT ITSELF** only:
-   - Physical features (design, color, material, size, weight)
-   - Functions, performance, specifications
-   - Usage methods, care instructions
-   - Price, model number, variations
-   - ONLY use product information explicitly stated in source text
-   
-6. 🚫 【ABSOLUTELY FORBIDDEN】Do NOT include even ONE of these:
-   ❌ Site features: "How to purchase" "Payment methods" "Registration" "Login"
-   ❌ Shipping/Delivery: "Shipping fee" "Delivery method" "Delivery time" "Address change"
-   ❌ Store info: "In-store stock" "Store location" "Business hours" "Other stores"
-   ❌ Points/Benefits: "Point rewards" "Coupon usage" "Campaigns"
-   ❌ After-sales: "Return method" "Exchange" "Warranty" "Repair"
-   ❌ Reviews/Community: "How to write reviews" "Post comments"
-   ❌ Company/Site: "Company info" "Contact" "Privacy policy"
-   ❌ Stock/Restock: "Restock schedule" "Restock notification" "How to check stock"
-
-【GOOD QUESTION EXAMPLES (About the product itself)】
-✅ "What is the official name and model number of this product?"
-✅ "What material is this product made of?"
-✅ "Does this cap have size adjustment features?"
-✅ "How many color variations are available?"
-✅ "What is the weight of this product?"
-✅ "What is the price of this product?"
-✅ "What are the distinctive design features?"
-✅ "What occasions is this product suitable for?"
-✅ "How should I care for this product?"
-✅ "What's the difference between this and other models?"
-
-❌ **FORBIDDEN QUESTION TYPES (ABSOLUTELY PROHIBITED)**:
-- Site functionality questions (e.g., purchase methods, registration procedures)
-- Shipping service questions (e.g., shipping fees, delivery days)
-- Store system questions (e.g., physical store locations, business hours)
-- Inventory management questions (e.g., restock schedules, stock check methods)
-- Return/exchange policy questions
-- Point service questions
-- Review posting functionality questions
-
-【Q&A CREATION FOCUS】(**Physical & functional features ONLY**)
-Extract from source text and create Q&As about:
-1. **Product ID**: Official name, model number, brand, series
-2. **Appearance**: Color, pattern, shape, style, logo, decoration
-3. **Material**: Fabric type, material quality, texture
-4. **Size/Dimensions**: Measurements, adjustability, fit
-5. **Functions**: Special features, waterproof, breathability, durability
-6. **Usage**: How to wear/use, care, storage, precautions
-7. **Price/Variations**: Tax-included price, color options, size options
-8. **Target/Purpose**: Recommended users, usage scenarios, season
-9. **Comparisons**: Differences within series, unique features
-
-⚠️ **IMPORTANT NOTE**:
-- Even if source text contains mostly site feature descriptions with little product info,
-  **NEVER create Q&As about site features**
-- In that case, create as many Q&As as possible from the limited product information
-- Better to have fewer Q&As than to include site feature questions${contentNote}
-
-【OUTPUT FORMAT - MUST FOLLOW】
-${qaType === 'mixed' ? `
-For each Q&A, output in the following format:
-
-Q1: [English question]
-A1: [Detailed English answer - source text only]
-Type1: collected or suggested
-
-- **Type: collected** = Facts explicitly stated in source text (e.g., product name, price, size, material)
-- **Type: suggested** = Content inferred/supplemented not explicitly in source (e.g., "The source text does not provide...")
-
-Criteria:
-✅ Type: collected - Answer is directly quoted or clearly stated in source text
-✅ Type: suggested - Answer contains "not provided", "no information", or general advice/inference
-
-Q2: [English question]
-A2: [Detailed English answer]
-Type2: collected or suggested
-
-...continue to Q${maxQA}
-` : `
-Q1: [English question]
-A1: [Detailed English answer - source text only]
-
-Q2: [English question]
-A2: [Detailed English answer - source text only]
-
-...continue to Q${maxQA}
-`}
+【OUTPUT FORMAT】
+${qaType === 'mixed' ? 'Q1: [question]\nA1: [answer]\nType1: collected or suggested\n\nQ2: ...' : 'Q1: [question]\nA1: [answer]\n\nQ2: ...'}
 
 【SOURCE TEXT】
-${content}
+${trimmedContent}
 
-【CRITICAL】
-- **Generate as close to ${maxQA} Q&A pairs as possible** (minimum ${isVeryLowContent ? Math.floor(maxQA * 0.3) : Math.floor(maxQA * 0.5)}+)
-- All answers must use ONLY information stated in the source text
-- Do NOT mention any products not listed in the source text
-- **Even with limited information, create questions from different angles and perspectives**
-- For OCR text, use only readable parts without guessing incomplete characters
+Generate EXACTLY ${maxQA} Q&A pairs.`;
+  } else { // Chinese
+    return `你是专业的中文产品Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对，仅关于**产品本身**（名称、颜色、材料、尺寸、功能、价格）。
 
-【FINAL VERIFICATION - MANDATORY】
-🚨🚨🚨 **CRITICAL: NEVER output questions containing forbidden terms** 🚨🚨🚨
+${qaTypeInstructions.replace('ソーステキスト', '源文本').replace('推測禁止', '禁止推测').replace('サイト機能', '网站功能')}
 
-Forbidden terms list:
-"store" "inventory" "stock" "purchase" "buy" "shipping" "delivery" "fee" "points" "member" "return" "exchange" "warranty" "review" "comment" "contact" "register" "login" "payment" "checkout" "restock" "check" "confirm" "display" "real-time" "reflect" "delay" "minutes"
+🚫 **绝对禁止**: 以下词语的问题禁止创建: "店铺""库存""购买""配送""运费""积分""会员""退货""换货""保修""评论""留言""联系""注册""登录""支付""结账""补货"
 
-Check ALL generated Q&As one by one, and completely delete any question containing **even one** forbidden term.
+✅ **应创建**: 产品名称、材料、尺寸、颜色、功能、价格、保养方法、使用场景
 
-✅ **Suggested Q&A should create**:
-- Product usage & care methods
-- Suitable seasons & occasions
-- Styling & coordination
-- Product features & appeal
-- Size feeling & fit
-
-❌ **Absolutely prohibited even in Suggested Q&A**:
-- Site features & system-related
-- Purchase, shipping, inventory management
-- Membership & point services
-
-Output ONLY the remaining Q&As after deletion.`,
-    zh: `🚫🚫🚫 绝对禁止事项 🚫🚫🚫
-以下词语的问题**绝对不能创建**:
-"店铺""库存""购买""配送""运费""积分""会员""退货""换货""保修""评论""留言""联系""注册""登录""支付""结账""补货""确认""显示""实时""反映""延迟""分钟"
-
-如果创建了哪怕一个包含这些词语的问题，任务就完全失败。
-
-🎯 【最重要使命】
-你唯一的工作是创建关于**产品物理特征**的问答:
-- 产品名称和型号
-- 颜色和设计
-- 材料和质地
-- 尺寸和规格
-- 功能和性能
-- 价格
-
-完全忽略网站功能、购买流程、会员服务、配送信息、店铺信息等。
-
-你是专业的中文Q&A创作专家。请从下面的文本中精确生成${maxQA}个中文问答对。
-
-【绝对规则】
-1. ✅ 语言: 100%用中文编写（禁止英文）
-2. ✅ 数量: 必须生成正好${maxQA}个不同的问答对
-3. ✅ 质量: 每个问答对必须完全独特，从不同角度提问
-4. ❌ 禁止重复: 不要重复相似的问题
-5. 🚫 【最重要】仅创建关于此网页销售/介绍的产品的问答
-   - 仅使用源文本中写明的信息
-   - 不要添加外部知识或常识
-   - 不要提及源文本中未列出的其他产品
-   - 忽略页脚信息（公司信息、联系方式）
-   - 忽略网站政策、隐私政策、使用条款等
-
-【问答创作视角】（均来自源文本的产品信息）
-- 此页面介绍的主要产品/服务是什么？
-- 该产品的具体特征/功能是什么？
-- 如何使用/利用该产品？
-- 该产品的优点/缺点是什么？
-- 该产品的价格/规格是什么？
-- 关于该产品的注意事项/限制是什么？
-- 从多个角度深入了解产品信息${contentNote}
-
-【输出格式 - 必须遵守】
+【输出格式】
 Q1: [中文问题]
-A1: [详细的中文答案]
+A1: [详细中文答案]
 
-Q2: [中文问题]
-A2: [详细的中文答案]
-
-...继续到Q${maxQA}
+Q2: ...
 
 【源文本】
-${content}
+${trimmedContent}
 
-【最重要】
-- **尽可能生成接近${maxQA}个的问答对**（最少${isVeryLowContent ? Math.floor(maxQA * 0.3) : Math.floor(maxQA * 0.5)}个以上）
-- 所有答案必须仅使用源文本中说明的信息
-- 不要提及源文本中未列出的任何产品
-- **即使信息有限，也要从不同角度和视角创建问题**
-- 对于OCR文本，只使用可读部分，不要猜测不完整的字符
-
-【最终验证 - 必须】
-生成所有问答后，再次检查并删除包含以下术语的**所有问题**：
-"店铺""库存""购买""配送""运费""积分""会员""退货""换货""保修""评论""留言""联系""注册""登录""支付""结账""补货""确认""显示""反映""延迟""实时""分钟"
-
-删除后，仅输出剩余的问答。`
-  };
-
-  try {
-    const prompt = languagePrompts[language] || languagePrompts['ja'];
-    
-    // 言語名をマッピング
-    const languageNames: Record<string, string> = {
-      ja: '日本語 (Japanese)',
-      en: 'English',
-      zh: '中文 (Chinese)'
-    };
-    const targetLanguage = languageNames[language] || languageNames['ja'];
-    
-    // モデル選択: 常にgpt-4o-miniを使用（より賢く、安価）
-    const model = 'gpt-4o-mini';
-    const maxTokensLimit = 16384;
-    const estimatedTokens = Math.min(maxQA * 120 + 1500, maxTokensLimit);
-    
-    console.log(`[MODEL SELECTION] model=${model}, maxTokensLimit=${maxTokensLimit}, estimatedTokens=${estimatedTokens}`);
-    console.log(`[OpenAI] Model: ${model}, max_tokens: ${estimatedTokens}, target: ${maxQA} Q&As in ${targetLanguage}`);
-    
-    // タイムアウトを2分に統一
-    const timeoutMs = 120000;
-    console.log(`[OpenAI] Timeout set to: ${timeoutMs}ms`);
-    
-    const response = await openai.chat.completions.create({
-      model: model,
-      messages: [
-        {
-          role: 'system',
-          content: `You are a professional Q&A creator. You MUST generate exactly ${maxQA} Q&A pairs in ${targetLanguage}. Never use any other language. Each Q&A must be unique and distinct. CRITICAL RULES: 1) Create Q&A ONLY about the main product/service featured on the webpage. 2) Use ONLY information from the provided source text. 3) Do NOT add external knowledge. 4) Do NOT mention products not in the source text. 5) IGNORE footer/policy/company info. Focus ONLY on product-specific information. IMPORTANT: Generate ALL ${maxQA} pairs, do not stop early.`
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: estimatedTokens
-    }, {
-      timeout: timeoutMs
-    });
-
-    const generatedText = response.choices[0]?.message?.content || '';
-    const tokensUsed = response.usage?.total_tokens || 0;
-    console.log(`[OpenAI] Response: ${generatedText.length} chars, ${tokensUsed} tokens used`);
-    console.log(`[OpenAI] Finish reason: ${response.choices[0]?.finish_reason || 'unknown'}`);
-    
-    // 生成されたテキストの最初の500文字をログ出力（デバッグ用）
-    console.log(`[OpenAI] First 500 chars: ${generatedText.substring(0, 500)}...`);
-    console.log(`[OpenAI] Last 300 chars: ...${generatedText.substring(Math.max(0, generatedText.length - 300))}`);
-    
-    // Q&Aをパース（Type情報も含む）
-    const qaItems: Array<{question: string, answer: string, type?: 'collected' | 'suggested'}> = [];
-    const lines = generatedText.split('\n');
-    let currentQ = '';
-    let currentA = '';
-    let currentType: 'collected' | 'suggested' | undefined = undefined;
-    let inAnswer = false;
-    
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      
-      // Q1:, Q2: などの形式を検出（柔軟なマッチング）
-      const qMatch = trimmed.match(/^Q\d+[:：]?\s*(.+)$/i);
-      const aMatch = trimmed.match(/^A\d+[:：]?\s*(.+)$/i);
-      const typeMatch = trimmed.match(/^Type\d+[:：]?\s*(collected|suggested)/i);
-      
-      if (qMatch) {
-        // 前のQ&Aがあれば保存
-        if (currentQ && currentA) {
-          qaItems.push({ 
-            question: currentQ.trim(), 
-            answer: currentA.trim(),
-            type: currentType
-          });
-        }
-        currentQ = qMatch[1].trim();
-        currentA = '';
-        currentType = undefined;
-        inAnswer = false;
-      } else if (aMatch) {
-        currentA = aMatch[1].trim();
-        inAnswer = true;
-      } else if (typeMatch) {
-        // Type情報を取得（mixedモードのみ）
-        currentType = typeMatch[1].toLowerCase() as 'collected' | 'suggested';
-        console.log(`  Parsed type: ${currentType} for Q: "${currentQ.substring(0, 50)}..."`);
-        inAnswer = false;
-      } else if (inAnswer && currentA) {
-        // 回答の続き
-        currentA += ' ' + trimmed;
-      } else if (!inAnswer && currentQ && !typeMatch) {
-        // 質問の続き
-        currentQ += ' ' + trimmed;
-      }
-    }
-    
-    // 最後のQ&Aを追加
-    if (currentQ && currentA) {
-      qaItems.push({ 
-        question: currentQ.trim(), 
-        answer: currentA.trim(),
-        type: currentType
-      });
-    }
-    
-    console.log(`📊 Parsed ${qaItems.length} Q&A items from response`);
-    if (qaItems.length > 0) {
-      console.log(`   First parsed Q: "${qaItems[0].question.substring(0, 60)}..."`);
-      console.log(`   Last parsed Q: "${qaItems[qaItems.length - 1].question.substring(0, 60)}..."`);
-    }
-    if (qaItems.length < maxQA * 0.5) {
-      console.error(`⚠️ CRITICAL: Only parsed ${qaItems.length}/${maxQA} Q&As - parsing may have failed!`);
-      console.error(`   Generated text length: ${generatedText.length} chars`);
-      console.error(`   Expected ~${maxQA * 150} chars for ${maxQA} Q&As`);
-    }
-    
-    // 重複を除去（質問と回答の両方をチェック）
-    const uniqueQA: Array<{question: string, answer: string, type?: 'collected' | 'suggested'}> = [];
-    const seenQuestions = new Set<string>();
-    const seenAnswers = new Set<string>();
-    
-    for (const item of qaItems) {
-      const qLower = item.question.toLowerCase().trim();
-      const aLower = item.answer.toLowerCase().trim();
-      
-      // 完全一致の重複をチェック
-      if (seenQuestions.has(qLower) || seenAnswers.has(aLower)) {
-        console.warn(`Duplicate detected: "${item.question.substring(0, 50)}..."`);
-        continue;
-      }
-      
-      // 類似度チェック（簡易版：最初の50文字が似ている場合）
-      let isDuplicate = false;
-      for (const seenQ of seenQuestions) {
-        if (qLower.substring(0, 50) === seenQ.substring(0, 50)) {
-          console.warn(`Similar question detected: "${item.question.substring(0, 50)}..."`);
-          isDuplicate = true;
-          break;
-        }
-      }
-      
-      if (!isDuplicate) {
-        seenQuestions.add(qLower);
-        seenAnswers.add(aLower);
-        uniqueQA.push(item);
-      }
-    }
-    
-    console.log(`After deduplication: ${uniqueQA.length} unique Q&A items (removed ${qaItems.length - uniqueQA.length} duplicates)`);
-    
-    // 生成数が70%未満の場合は再試行または補完
-    if (uniqueQA.length < maxQA * 0.7) {
-      console.warn(`⚠️ Warning: Generated ${uniqueQA.length} Q&As but requested ${maxQA}. Attempting to supplement...`);
-      
-      // 追加生成を試みる
-      const needed = maxQA - uniqueQA.length;
-      console.log(`Attempting to generate ${needed} additional Q&As...`);
-      
-      try {
-        const supplementPrompt = language === 'ja' 
-          ? `以下の既存のQ&Aとは異なる、新しい${needed}個のQ&Aを日本語で生成してください。\n\n既存のQ&A:\n${uniqueQA.map((qa, i) => `Q${i+1}: ${qa.question}`).join('\n')}\n\n元のテキスト:\n${content}\n\n必ず${needed}個の全く新しいQ&Aを生成してください。`
-          : language === 'zh'
-          ? `生成${needed}个与以下现有问答不同的新问答（中文）。\n\n现有问答:\n${uniqueQA.map((qa, i) => `Q${i+1}: ${qa.question}`).join('\n')}\n\n原文:\n${content}\n\n必须生成${needed}个全新的问答。`
-          : `Generate ${needed} NEW Q&A pairs in ENGLISH that are different from the existing ones below.\n\nExisting Q&As:\n${uniqueQA.map((qa, i) => `Q${i+1}: ${qa.question}`).join('\n')}\n\nOriginal text:\n${content}\n\nMust generate exactly ${needed} completely new Q&As.`;
-        
-        const supplementResponse = await openai.chat.completions.create({
-          model: model,
-          messages: [
-            {
-              role: 'system',
-              content: `Generate ${needed} additional unique Q&A pairs in ${targetLanguage}.`
-            },
-            {
-              role: 'user',
-              content: supplementPrompt
-            }
-          ],
-          temperature: 0.8,
-          max_tokens: Math.min(needed * 120 + 500, maxTokensLimit)
-        });
-        
-        const supplementText = supplementResponse.choices[0]?.message?.content || '';
-        console.log(`[Supplement] Generated ${supplementText.length} chars`);
-        
-        // 追加Q&Aをパース
-        const supplementLines = supplementText.split('\n');
-        let suppQ = '';
-        let suppA = '';
-        let inSuppAnswer = false;
-        
-        for (const line of supplementLines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          
-          const qMatch = trimmed.match(/^Q\d+[:：]?\s*(.+)$/i);
-          const aMatch = trimmed.match(/^A\d+[:：]?\s*(.+)$/i);
-          
-          if (qMatch) {
-            if (suppQ && suppA) {
-              const qLower = suppQ.toLowerCase().trim();
-              if (!seenQuestions.has(qLower)) {
-                uniqueQA.push({ question: suppQ.trim(), answer: suppA.trim() });
-                seenQuestions.add(qLower);
-                console.log(`Added supplement Q&A: "${suppQ.substring(0, 50)}..."`);
-              }
-            }
-            suppQ = qMatch[1].trim();
-            suppA = '';
-            inSuppAnswer = false;
-          } else if (aMatch) {
-            suppA = aMatch[1].trim();
-            inSuppAnswer = true;
-          } else if (inSuppAnswer && suppA) {
-            suppA += ' ' + trimmed;
-          }
-        }
-        
-        // 最後の追加Q&A
-        if (suppQ && suppA) {
-          const qLower = suppQ.toLowerCase().trim();
-          if (!seenQuestions.has(qLower)) {
-            uniqueQA.push({ question: suppQ.trim(), answer: suppA.trim() });
-            console.log(`Added final supplement Q&A: "${suppQ.substring(0, 50)}..."`);
-          }
-        }
-        
-        console.log(`✅ After supplementing: ${uniqueQA.length} total Q&As`);
-      } catch (suppErr) {
-        console.error('Failed to generate supplement Q&As:', suppErr);
-      }
-    }
-    
-    // mixedモードの場合、LLMが返したtype情報をそのまま使用
-    if (qaType === 'mixed') {
-      console.log('🔀 Mixed mode: Using LLM-provided type classification');
-      
-      const finalQAs = uniqueQA.slice(0, maxQA);
-      const suggestedCount = finalQAs.filter(qa => qa.type === 'suggested').length;
-      const collectedCount = finalQAs.filter(qa => qa.type === 'collected').length;
-      const undefinedCount = finalQAs.filter(qa => !qa.type).length;
-      
-      // typeが未定義のものはデフォルトでcollectedにする
-      finalQAs.forEach(qa => {
-        if (!qa.type) {
-          qa.type = 'collected';
-          console.log(`  ⚠️ Type undefined for Q: "${qa.question.substring(0, 60)}..." → defaulting to 'collected'`);
-        }
-      });
-      
-      console.log(`📊 Final: Returning ${finalQAs.length} Q&As (${suggestedCount} suggested + ${collectedCount} collected + ${undefinedCount} defaulted)`);
-      return finalQAs;
-    }
-    
-    // maxQAの数に制限（超過分はカット）
-    const finalQAs = uniqueQA.slice(0, maxQA);
-    console.log(`📊 Final: Returning ${finalQAs.length} Q&As (requested: ${maxQA})`);
-    return finalQAs;
-  } catch (error) {
-    throw new Error(`Failed to generate Q&A: ${error}`);
+必须生成正好${maxQA}个问答对。`;
   }
 }
 
-// メインワークフローエンドポイント
+/**
+ * Claude API でQ&A生成を試行
+ */
+async function generateQAWithClaude(prompt: string, maxQA: number): Promise<Array<{question: string, answer: string, type?: 'collected' | 'suggested'}>> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error('Anthropic API key not configured');
+  }
+  
+  console.log('🤖 Attempting Q&A generation with Claude 3.5 Sonnet...');
+  
+  const anthropic = new Anthropic({ apiKey });
+  
+  const response = await anthropic.messages.create({
+    model: 'claude-3-5-sonnet-20241022',
+    max_tokens: Math.min(maxQA * 150 + 500, 4096),
+    temperature: 0.7,
+    messages: [{
+      role: 'user',
+      content: prompt
+    }]
+  });
+  
+  const text = response.content[0].type === 'text' ? response.content[0].text : '';
+  console.log(`✅ Claude response: ${text.length} characters`);
+  console.log(`📊 Token usage: input=${response.usage.input_tokens}, output=${response.usage.output_tokens}`);
+  
+  return parseQAResponse(text);
+}
+
+/**
+ * Gemini API でQ&A生成を試行
+ */
+async function generateQAWithGemini(prompt: string, maxQA: number): Promise<Array<{question: string, answer: string, type?: 'collected' | 'suggested'}>> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('Gemini API key not configured');
+  }
+  
+  console.log('🤖 Attempting Q&A generation with Gemini 2.0 Flash...');
+  
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.0-flash-exp'
+  });
+  
+  const result = await model.generateContent({
+    contents: [{
+      role: 'user',
+      parts: [{ text: prompt }]
+    }],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: Math.min(maxQA * 150 + 500, 8192)
+    }
+  });
+  
+  const text = result.response.text();
+  console.log(`✅ Gemini response: ${text.length} characters`);
+  
+  return parseQAResponse(text);
+}
+
+/**
+ * OpenAI API でQ&A生成を試行
+ */
+async function generateQAWithOpenAI(prompt: string, maxQA: number): Promise<Array<{question: string, answer: string, type?: 'collected' | 'suggested'}>> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OpenAI API key not configured');
+  }
+  
+  console.log('🤖 Attempting Q&A generation with OpenAI gpt-4o-mini...');
+  
+  const openai = new OpenAI({ apiKey });
+  
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: 'You are a professional product Q&A generator.' },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.7,
+    max_tokens: Math.min(maxQA * 150 + 500, 16384)
+  }, {
+    timeout: 120000 // 2分
+  });
+  
+  const text = response.choices[0]?.message?.content || '';
+  console.log(`✅ OpenAI response: ${text.length} characters`);
+  console.log(`📊 Token usage: input=${response.usage?.prompt_tokens}, output=${response.usage?.completion_tokens}`);
+  
+  return parseQAResponse(text);
+}
+
+/**
+ * LLMレスポンスからQ&Aをパース
+ */
+function parseQAResponse(text: string): Array<{question: string, answer: string, type?: 'collected' | 'suggested'}> {
+  const qaList: Array<{question: string, answer: string, type?: 'collected' | 'suggested'}> = [];
+  const lines = text.split('\n');
+  
+  let currentQ = '';
+  let currentA = '';
+  let currentType: 'collected' | 'suggested' | undefined = undefined;
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    
+    // Q1:, Q2:, Q3: ... の検出
+    const qMatch = trimmed.match(/^Q\d+[:：]\s*(.+)/);
+    if (qMatch) {
+      // 前のQ&Aを保存
+      if (currentQ && currentA) {
+        qaList.push({ question: currentQ, answer: currentA, type: currentType });
+      }
+      currentQ = qMatch[1].trim();
+      currentA = '';
+      currentType = undefined;
+      continue;
+    }
+    
+    // A1:, A2:, A3: ... の検出
+    const aMatch = trimmed.match(/^A\d+[:：]\s*(.+)/);
+    if (aMatch) {
+      currentA = aMatch[1].trim();
+      continue;
+    }
+    
+    // Type1:, Type2: ... の検出 (mixedモード用)
+    const tMatch = trimmed.match(/^Type\d+[:：]\s*(collected|suggested)/i);
+    if (tMatch) {
+      currentType = tMatch[1].toLowerCase() as 'collected' | 'suggested';
+      continue;
+    }
+    
+    // 複数行の回答をサポート
+    if (currentA && trimmed && !trimmed.startsWith('Q') && !trimmed.startsWith('Type')) {
+      currentA += ' ' + trimmed;
+    }
+  }
+  
+  // 最後のQ&Aを追加
+  if (currentQ && currentA) {
+    qaList.push({ question: currentQ, answer: currentA, type: currentType });
+  }
+  
+  console.log(`📋 Parsed ${qaList.length} Q&A pairs from response`);
+  return qaList;
+}
+
+async function generateQA(content: string, maxQA: number = 5, language: string = 'ja', productUrl?: string, isOCRMode: boolean = false, qaType: 'collected' | 'suggested' | 'mixed' = 'collected'): Promise<Array<{question: string, answer: string, type?: 'collected' | 'suggested'}>> {
+  console.log('🚀 Starting Q&A generation with Multi-LLM support...');
+  console.log('  Parameters:', { maxQA, language, contentLength: content.length, isOCRMode, qaType });
+  
+  // 簡潔なプロンプトを生成（トークン数削減）
+  const prompt = generateCompactPrompt(content, maxQA, language, qaType);
+  console.log(`📝 Generated compact prompt: ${prompt.length} characters`);
+  
+  // LLMを順に試行: Claude (最速) → Gemini (無料枠あり) → OpenAI (フォールバック)
+  const llmProviders = [
+    { name: 'Claude 3.5 Sonnet', fn: () => generateQAWithClaude(prompt, maxQA), key: 'ANTHROPIC_API_KEY' },
+    { name: 'Gemini 2.0 Flash', fn: () => generateQAWithGemini(prompt, maxQA), key: 'GEMINI_API_KEY' },
+    { name: 'OpenAI gpt-4o-mini', fn: () => generateQAWithOpenAI(prompt, maxQA), key: 'OPENAI_API_KEY' }
+  ];
+  
+  let lastError: Error | null = null;
+  
+  for (const provider of llmProviders) {
+    // API keyが設定されているかチェック
+    if (!process.env[provider.key]) {
+      console.log(`⏭️  Skipping ${provider.name}: API key not configured`);
+      continue;
+    }
+    
+    try {
+      console.log(`\n🤖 Trying ${provider.name}...`);
+      const startTime = Date.now();
+      
+      const qaList = await provider.fn();
+      
+      const elapsed = Date.now() - startTime;
+      console.log(`✅ SUCCESS with ${provider.name} in ${elapsed}ms`);
+      console.log(`📊 Generated ${qaList.length} Q&A pairs`);
+      
+      if (qaList.length === 0) {
+        console.warn(`⚠️  ${provider.name} returned 0 Q&As, trying next provider...`);
+        lastError = new Error(`${provider.name} returned empty result`);
+        continue;
+      }
+      
+      // 成功: Q&Aリストを返す
+      return qaList;
+      
+    } catch (error: any) {
+      console.error(`❌ ${provider.name} failed:`, error.message);
+      lastError = error;
+      
+      // API制限エラーの場合は次のプロバイダーへ
+      if (error.message?.includes('rate_limit') || error.message?.includes('quota') || error.message?.includes('429')) {
+        console.warn(`⚠️  ${provider.name} rate limit/quota exceeded, trying next provider...`);
+        continue;
+      }
+      
+      // その他のエラーも次のプロバイダーへフォールバック
+      console.warn(`⚠️  Falling back to next provider...`);
+    }
+  }
+  
+  // すべてのプロバイダーが失敗した場合
+  console.error('❌ ALL LLM providers failed!');
+  throw new Error(`Q&A generation failed with all providers. Last error: ${lastError?.message || 'Unknown error'}`);
+}
+
 app.post('/api/workflow', async (req: Request<{}, {}, WorkflowRequest>, res: Response<WorkflowResponse>) => {
   console.log('=== Workflow Request Started ===');
   console.log('Raw request body:', JSON.stringify(req.body, null, 2));
@@ -2485,7 +2123,8 @@ app.post('/api/workflow-ocr', upload.array('image0', 10), async (req: Request, r
     console.log('  - Text analysis: UI elements=', combinedText.match(/(ログイン|カート|メニュー|ゲスト|ナビ)/g)?.length || 0);
     
     // Q&A生成（リクエストからmaxQAとlanguageを取得）
-    let maxQA = req.body.maxQA ? parseInt(req.body.maxQA, 10) : 40;
+    // デフォルト値を40→20に削減してタイムアウトを防ぐ
+    let maxQA = req.body.maxQA ? parseInt(req.body.maxQA, 10) : 20;
     const language = req.body.language || 'ja';
     
     // 製品情報が検出されない場合、maxQAを大幅に削減（3個のみ）
